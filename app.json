@@ -1,29 +1,82 @@
 {
   "expo": {
-    "name": "YoldasApp",
+    "name": "Yoldaş",
     "slug": "YoldasApp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yoldas.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Yoldaş, namaz vakitlerini ve kıble yönünü doğru hesaplamak için konumuna ihtiyaç duyar."
+      }
     },
     "android": {
+      "package": "com.yoldas.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "SCHEDULE_EXACT_ALARM",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Yoldaş, namaz vakitlerini ve kıble yönünü doğru hesaplamak için konumuna ihtiyaç duyar."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2D5A27",
+          "sounds": [
+            "./assets/sounds/ney.wav",
+            "./assets/sounds/kuscivilti.wav",
+            "./assets/sounds/ruzgarcan.wav",
+            "./assets/sounds/thunderbowl.wav",
+            "./assets/sounds/arabicsounds.wav"
+          ]
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+         "android": {
+      "usesCleartextTraffic": true,
+      "enableMultidex": true
+    }
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/app-check"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6032cf52-b012-4ab0-b6e1-e794e940166b"
+      }
     }
   }
 }

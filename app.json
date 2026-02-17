@@ -41,6 +41,8 @@
    "plugins": [
   "@react-native-firebase/app",
   "@react-native-firebase/app-check",
+  "@react-native-firebase/functions",
+  "@react-native-voice/voice",
   "expo-sqlite",
   "expo-font",
   [

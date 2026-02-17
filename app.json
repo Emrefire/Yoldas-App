@@ -38,41 +38,41 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-sqlite",
-      "expo-font",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Yoldaş, namaz vakitlerini ve kıble yönünü doğru hesaplamak için konumuna ihtiyaç duyar."
-        }
-      ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/icon.png",
-          "color": "#2D5A27",
-          "sounds": [
-            "./assets/sounds/ney.wav",
-            "./assets/sounds/kuscivilti.wav",
-            "./assets/sounds/ruzgarcan.wav",
-            "./assets/sounds/thunderbowl.wav",
-            "./assets/sounds/arabicsounds.wav"
-          ]
-        }
-      ],
-      [
-        "expo-build-properties",
-        {
-         "android": {
-      "usesCleartextTraffic": true,
-      "enableMultidex": true
+   "plugins": [
+  "@react-native-firebase/app",
+  "@react-native-firebase/app-check",
+  "expo-sqlite",
+  "expo-font",
+  [
+    "expo-location",
+    {
+      "locationAlwaysAndWhenInUsePermission": "Yoldaş, namaz vakitlerini ve kıble yönünü doğru hesaplamak için konumuna ihtiyaç duyar."
     }
-        }
-      ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/app-check"
-    ],
+  ],
+  [
+    "expo-notifications",
+    {
+      "icon": "./assets/icon.png",
+      "color": "#2D5A27",
+      "sounds": [
+        "./assets/sounds/ney.wav",
+        "./assets/sounds/kuscivilti.wav",
+        "./assets/sounds/ruzgarcan.wav",
+        "./assets/sounds/thunderbowl.wav",
+        "./assets/sounds/arabicsounds.wav"
+      ]
+    }
+  ],
+  [
+    "expo-build-properties",
+    {
+      "android": {
+        "usesCleartextTraffic": true,
+        "enableMultidex": true
+      }
+    }
+  ]
+],
     "extra": {
       "eas": {
         "projectId": "6032cf52-b012-4ab0-b6e1-e794e940166b"

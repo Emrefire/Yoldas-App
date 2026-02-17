@@ -41,7 +41,6 @@
    "plugins": [
   "@react-native-firebase/app",
   "@react-native-firebase/app-check",
-  "@react-native-voice/voice",
   "expo-sqlite",
   "expo-font",
   [
@@ -68,6 +67,9 @@
     "expo-build-properties",
     {
       "android": {
+        "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "buildToolsVersion": "34.0.0",
         "usesCleartextTraffic": true,
         "enableMultidex": true
       }

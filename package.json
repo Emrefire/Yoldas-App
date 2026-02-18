@@ -14,7 +14,6 @@
     "@react-native-firebase/app": "^23.8.6",
     "@react-native-firebase/app-check": "^23.8.6",
     "@react-native-firebase/functions": "^23.8.6",
-    "@react-native-voice/voice": "^3.2.4",
     "@react-navigation/bottom-tabs": "^7.12.0",
     "@react-navigation/native": "^7.1.28",
     "@react-navigation/native-stack": "^7.12.0",
@@ -47,12 +46,12 @@
     "react-native-view-shot": "4.0.3"
   },
   "overrides": {
-  "androidx.core": {
-    "core": "1.13.1"
+    "androidx.core": {
+      "core": "1.13.1"
+    },
+    "com.android.support": {
+      "support-compat": "28.0.0"
+    }
   },
-  "com.android.support": {
-    "support-compat": "28.0.0"
-  }
-},
   "private": true
 }

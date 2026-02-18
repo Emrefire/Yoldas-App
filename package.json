@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/config-plugins": "~54.0.4",
     "@google/generative-ai": "^0.21.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-firebase/app": "^23.8.6",

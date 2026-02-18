@@ -10,9 +10,22 @@
     "preview": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_EZAN_API_URL": "https://api.aladhan.com/v1",
+        "EXPO_PUBLIC_KURAN_API_URL": "https://api.alquran.cloud/v1",
+        "EXPO_PUBLIC_OVERPASS_MAIN": "https://overpass-api.de/api/interpreter",
+        "EXPO_PUBLIC_OVERPASS_BACKUP": "https://overpass.kumi.systems/api/interpreter"
       }
     },
-    "production": {}
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_EZAN_API_URL": "https://api.aladhan.com/v1",
+        "EXPO_PUBLIC_KURAN_API_URL": "https://api.alquran.cloud/v1",
+        "EXPO_PUBLIC_OVERPASS_MAIN": "https://overpass-api.de/api/interpreter",
+        "EXPO_PUBLIC_OVERPASS_BACKUP": "https://overpass.kumi.systems/api/interpreter"
+      }
+    }
   },
   "submit": {
     "production": {}

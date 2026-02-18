@@ -7,9 +7,9 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { 
-  CheckCircle2, Heart, Share2, MapPin, Plus, X, RefreshCw, BookOpen, 
+  CheckCircle2, Heart, Share2, MapPin, Plus, X, BookOpen, 
   Quote, Compass, Trash2, Star, MoonStar, Sparkles, Calendar 
-} from 'lucide-react-native';
+} from 'lucide-react-native'; // RefreshCw ikonunu kaldırdık
 import axios from 'axios';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
@@ -167,8 +167,8 @@ export default function HomeScreen() {
   useEffect(() => {
     initDB();
     registerForPushNotificationsAsync();
-    fetchHadis();
     fetchAyet();
+    fetchHadis();
     fetchEsma(); 
     setCurrentDateStr(getFormattedDate());
     setHijriDateStr(getHijriDate());
@@ -207,12 +207,10 @@ export default function HomeScreen() {
             }
         }
         
-        // 1. API İSTEĞİ YAP
         const response = await axios.get(`${EZAN_API_URL}/timings`, { 
             params: { latitude: queryLat, longitude: queryLon, method: 13 } 
         });
 
-        // 2. VERİLERİ DEVREYE AL
         const fetchedTimings = response.data.data.timings;
         const fetchedHijri = response.data.data.date.hijri.month.number;
         
@@ -221,39 +219,33 @@ export default function HomeScreen() {
         setHijriMonth(fetchedHijri);
         setLoading(false);
 
-        // 🔥 3. CACHE'E KAYDET (YENİ EKLENEN KISIM)
         const cacheData = {
             timings: fetchedTimings,
             hijri: fetchedHijri,
             location: displayName,
-            date: new Date().toDateString() // "Tue Feb 17 2026" formatında tarih damgası
+            date: new Date().toDateString() 
         };
         await AsyncStorage.setItem('cached_vakitler', JSON.stringify(cacheData));
 
     } catch (error) {
-        console.log("İnternet yok, cache kontrol ediliyor...");
-        
-        // 🔥 4. İNTERNET YOKSA CACHE'DEN OKU
         try {
             const cachedStr = await AsyncStorage.getItem('cached_vakitler');
             if (cachedStr) {
                 const cached = JSON.parse(cachedStr);
                 const today = new Date().toDateString();
 
-                // Cache bugüne mi ait?
                 if (cached.date === today) {
                     setVakitler(cached.timings);
                     setHijriMonth(cached.hijri);
                     setLocationName(`${cached.location} (Çevrimdışı)`);
                     setLoading(false);
-                    return; // Fonksiyonu burada bitir, hata mesajı verme
+                    return; 
                 }
             }
         } catch (cacheError) {
             console.log("Cache okuma hatası:", cacheError);
         }
 
-        // Cache de yoksa veya eskiyse hata göster
         setLoading(false);
         setLocationName("Bağlantı Yok");
     }
@@ -358,54 +350,104 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, [vakitler]);
 
+  // 🔥 GÜNLÜK AYET MANTIĞI
   const fetchAyet = async () => {
     setAyetLoading(true);
-    setTimeout(async () => {
-        try {
-            const randomAyahNum = Math.floor(Math.random() * 6236) + 1;
-            const response = await axios.get(`${KURAN_API_URL}/ayah/${randomAyahNum}/tr.diyanet?t=${Date.now()}`, { timeout: 6000 });
-            const item = response.data.data;
-            const sureNo = item.surah.number;
-            const turkceSure = SURE_ISIMLERI.find(s => s.id === sureNo);
-            const sureAdi = turkceSure ? turkceSure.name : item.surah.englishName;
-            const ayetData = { content: item.text, source: `${sureAdi} Suresi, ${item.numberInSurah}. Ayet`, id: `ayah-${item.number}` };
-            setAyet(ayetData);
-            setIsAyetFav(isFavorite(ayetData.id));
-        } catch (error) { 
-            setAyet({ content: "Rabbiniz şöyle buyurdu: Bana dua edin, duanıza icabet edeyim.", source: "Mü'min Suresi, 60. Ayet", id: "ayah-static" }); 
-        } finally { setAyetLoading(false); }
-    }, 500);
+    try {
+        const today = new Date().toDateString();
+        const cachedStr = await AsyncStorage.getItem('daily_ayet');
+        
+        if (cachedStr) {
+            const cached = JSON.parse(cachedStr);
+            if (cached.date === today) {
+                setAyet(cached.data);
+                setIsAyetFav(isFavorite(cached.data.id));
+                setAyetLoading(false);
+                return;
+            }
+        }
+
+        const randomAyahNum = Math.floor(Math.random() * 6236) + 1;
+        const response = await axios.get(`${KURAN_API_URL}/ayah/${randomAyahNum}/tr.diyanet?t=${Date.now()}`, { timeout: 6000 });
+        const item = response.data.data;
+        const sureNo = item.surah.number;
+        const turkceSure = SURE_ISIMLERI.find(s => s.id === sureNo);
+        const sureAdi = turkceSure ? turkceSure.name : item.surah.englishName;
+        const ayetData = { content: item.text, source: `${sureAdi} Suresi, ${item.numberInSurah}. Ayet`, id: `ayah-${item.number}` };
+        
+        await AsyncStorage.setItem('daily_ayet', JSON.stringify({ date: today, data: ayetData }));
+        
+        setAyet(ayetData);
+        setIsAyetFav(isFavorite(ayetData.id));
+    } catch (error) { 
+        setAyet({ content: "Rabbiniz şöyle buyurdu: Bana dua edin, duanıza icabet edeyim.", source: "Mü'min Suresi, 60. Ayet", id: "ayah-static" }); 
+    } finally { 
+        setAyetLoading(false); 
+    }
   };
 
-  const fetchHadis = () => {
+  // 🔥 GÜNLÜK HADİS MANTIĞI
+  const fetchHadis = async () => {
     setHadisLoading(true);
-    setTimeout(() => {
+    try {
+        const today = new Date().toDateString();
+        const cachedStr = await AsyncStorage.getItem('daily_hadis');
+        
+        if (cachedStr) {
+            const cached = JSON.parse(cachedStr);
+            if (cached.date === today) {
+                setHadis(cached.data);
+                setIsHadisFav(isFavorite(cached.data.id));
+                setHadisLoading(false);
+                return;
+            }
+        }
+
         const pool = (GUNLUK_HADISLER && GUNLUK_HADISLER.length > 0) ? GUNLUK_HADISLER : [{ text: "Ameller niyetlere göredir.", source: "Buhari" }];
-        let randomIndex, newHadis, attempts = 0;
-        do {
-            randomIndex = Math.floor(Math.random() * pool.length);
-            newHadis = pool[randomIndex];
-            attempts++;
-        } while (hadis && newHadis.text === hadis.content && attempts < 20); 
+        const randomIndex = Math.floor(Math.random() * pool.length);
+        const newHadis = pool[randomIndex];
         const localId = `hadith-local-${Date.now()}-${randomIndex}`; 
-        setHadis({ content: newHadis.text, source: newHadis.source, id: localId });
+        const hadisData = { content: newHadis.text, source: newHadis.source, id: localId };
+
+        await AsyncStorage.setItem('daily_hadis', JSON.stringify({ date: today, data: hadisData }));
+
+        setHadis(hadisData);
         setIsHadisFav(isFavorite(localId));
+    } catch (error) {
+        console.log(error);
+    } finally {
         setHadisLoading(false);
-    }, 500);
+    }
   };
 
-  const fetchEsma = () => {
-      if (ESMA_TR_LIST && ESMA_TR_LIST.length > 0) {
-          let newEsma, attempts = 0;
-          do {
+  // 🔥 GÜNLÜK ESMA MANTIĞI
+  const fetchEsma = async () => {
+      try {
+          const today = new Date().toDateString();
+          const cachedStr = await AsyncStorage.getItem('daily_esma');
+          
+          if (cachedStr) {
+              const cached = JSON.parse(cachedStr);
+              if (cached.date === today) {
+                  setEsma(cached.data);
+                  setIsEsmaFav(isFavorite(`esma-${cached.data.number}`));
+                  return;
+              }
+          }
+
+          if (ESMA_TR_LIST && ESMA_TR_LIST.length > 0) {
              const randomIndex = Math.floor(Math.random() * ESMA_TR_LIST.length);
-             newEsma = ESMA_TR_LIST[randomIndex];
-             attempts++;
-          } while (esma && newEsma.number === esma.number && attempts < 20);
-          setEsma(newEsma);
-          setIsEsmaFav(isFavorite(`esma-${newEsma.number}`)); 
-      } else {
-          setEsma({ number: 1, name: "Allah", arabic: "الله", meaning: "Eşi benzeri olmayan tek İlah." });
+             const newEsma = ESMA_TR_LIST[randomIndex];
+             
+             await AsyncStorage.setItem('daily_esma', JSON.stringify({ date: today, data: newEsma }));
+             
+             setEsma(newEsma);
+             setIsEsmaFav(isFavorite(`esma-${newEsma.number}`)); 
+          } else {
+             setEsma({ number: 1, name: "Allah", arabic: "الله", meaning: "Eşi benzeri olmayan tek İlah." });
+          }
+      } catch (error) {
+          console.log(error);
       }
   };
 
@@ -511,7 +553,7 @@ export default function HomeScreen() {
              <Text style={[styles.newLocationText, { color: theme.text }]}>{locationName}</Text>
           </View>
 
-          {/* 🔥 ARAÇLAR SATIRI - BURADA İMSAKİYE EKLENDİ */}
+          {/* ARAÇLAR SATIRI */}
           <View style={styles.newToolsRow}>
               {/* CAMİLER */}
               <TouchableOpacity style={[styles.newToolBtn, { backgroundColor: isDarkMode ? theme.iconBg : '#F5F5F5', flex: 1, marginRight: 6 }]} onPress={() => navigation.navigate('Mosque')}>
@@ -519,7 +561,7 @@ export default function HomeScreen() {
                   <Text style={[styles.newToolText, { color: theme.primary, fontSize: 13 }]}>Camiler</Text>
               </TouchableOpacity>
               
-              {/* İMSAKİYE (ORTADA) */}
+              {/* İMSAKİYE */}
               <TouchableOpacity style={[styles.newToolBtn, { backgroundColor: isDarkMode ? theme.iconBg : '#F5F5F5', flex: 1, marginHorizontal: 3 }]} onPress={() => navigation.navigate('Imsakiye')}>
                   <Calendar size={18} color={theme.primary} />
                   <Text style={[styles.newToolText, { color: theme.primary, fontSize: 13 }]}>İmsakiye</Text>
@@ -562,7 +604,7 @@ export default function HomeScreen() {
           <View style={styles.cardActions}>
             <TouchableOpacity onPress={() => toggleFavoriteItem(ayet, 'ayet')}><Heart size={22} color={isAyetFav ? "#E74C3C" : theme.subText} fill={isAyetFav ? "#E74C3C" : "transparent"} /></TouchableOpacity>
             <TouchableOpacity onPress={() => shareAsImage(ayetRef)} style={styles.actionIcon}><Share2 size={22} color={theme.primary} /></TouchableOpacity>
-            <TouchableOpacity onPress={fetchAyet} style={styles.actionIcon}><RefreshCw size={22} color={theme.primary} /></TouchableOpacity>
+            {/* 🔥 Yenileme Tuşu Silindi */}
           </View>
         </View>
 
@@ -581,7 +623,7 @@ export default function HomeScreen() {
               <View style={styles.cardActions}>
                 <TouchableOpacity onPress={() => toggleFavoriteItem(esma, 'esma')}><Heart size={22} color={isEsmaFav ? "#E74C3C" : theme.subText} fill={isEsmaFav ? "#E74C3C" : "transparent"} /></TouchableOpacity>
                 <TouchableOpacity onPress={() => shareAsImage(esmaRef)} style={styles.actionIcon}><Share2 size={22} color={theme.primary} /></TouchableOpacity>
-                <TouchableOpacity onPress={fetchEsma} style={styles.actionIcon}><RefreshCw size={22} color={theme.primary} /></TouchableOpacity>
+                {/* 🔥 Yenileme Tuşu Silindi */}
               </View>
             </View>
         )}
@@ -597,7 +639,7 @@ export default function HomeScreen() {
           <View style={styles.cardActions}>
             <TouchableOpacity onPress={() => toggleFavoriteItem(hadis, 'hadis')}><Heart size={22} color={isHadisFav ? "#E74C3C" : theme.subText} fill={isHadisFav ? "#E74C3C" : "transparent"} /></TouchableOpacity>
             <TouchableOpacity onPress={() => shareAsImage(hadisRef)} style={styles.actionIcon}><Share2 size={22} color={theme.primary} /></TouchableOpacity>
-            <TouchableOpacity onPress={fetchHadis} style={styles.actionIcon}><RefreshCw size={22} color={theme.primary} /></TouchableOpacity>
+            {/* 🔥 Yenileme Tuşu Silindi */}
           </View>
         </View>
 
@@ -621,7 +663,7 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* MODALLAR (Aynı Şekilde Kalıyor) */}
+      {/* MODALLAR */}
       <Modal animationType="fade" transparent visible={prayerModalVisible}>
          <View style={styles.celebrationOverlay}>
              <View style={[styles.celebrationCard, { backgroundColor: theme.card, borderColor: theme.primary, borderWidth: 2 }]}>
@@ -703,7 +745,6 @@ const styles = StyleSheet.create({
   newLocationHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 15 },
   newLocationText: { fontSize: 16, fontWeight: 'bold', marginLeft: 8, textAlign: 'center' },
   
-  // 🔥 YENİ BUTON DÜZENİ
   newToolsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
   newToolBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12 },
   newToolText: { fontSize: 14, fontWeight: 'bold', marginLeft: 6 },

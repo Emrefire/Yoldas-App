@@ -6,7 +6,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Home, BookOpen, Fingerprint, Settings, Heart } from 'lucide-react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications'; // 🔥 EKLENDİ
+import * as Notifications from 'expo-notifications';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'; // 🔥 EKLENDİ
 
 // Context & DB & Error Boundary
 import { ThemeProvider, useTheme } from './src/context/ThemeContext'; 
@@ -32,12 +33,10 @@ import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
 import HeritageScreen from './src/screens/HeritageScreen';
 import ImsakiyeScreen from './src/screens/ImsakiyeScreen';
 
-// 🔥 GLOBAL NAVIGASYON REFERANSI
 export const navigationRef = createNavigationContainerRef();
 
 SplashScreen.preventAutoHideAsync();
 
-// 🔥 BİLDİRİM AYARLARI (Uygulama açıkken bildirim gelirse nasıl görünsün?)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -49,7 +48,6 @@ Notifications.setNotificationHandler({
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// --- ANA SAYFA STACK ---
 function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -58,7 +56,6 @@ function HomeStack() {
   );
 }
 
-// --- KÜTÜPHANE STACK ---
 function LibraryStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -69,7 +66,6 @@ function LibraryStack() {
   );
 }
 
-// --- AYARLAR STACK ---
 function SettingsStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -79,9 +75,10 @@ function SettingsStack() {
   );
 }
 
-// --- TAB NAVIGATOR ---
+// 🔥 ALT MENÜ GÜVENLİ ALAN AYARI
 function MainTabs() {
   const { theme, isDarkMode } = useTheme();
+  const insets = useSafeAreaInsets(); // 🔥 EKLENDİ: Telefonun alt/üst boşluklarını hesaplar
 
   return (
     <Tab.Navigator
@@ -97,8 +94,9 @@ function MainTabs() {
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: isDarkMode ? '#8E8E93' : '#A0A0A0',
         tabBarStyle: { 
-          height: Platform.OS === 'ios' ? 90 : 70, 
-          paddingBottom: Platform.OS === 'ios' ? 30 : 10, 
+          // 🔥 EKLENDİ: insets.bottom ile telefonun alt tuşları kadar ekstra boşluk bırakılır
+          height: (Platform.OS === 'ios' ? 90 : 70) + insets.bottom, 
+          paddingBottom: (Platform.OS === 'ios' ? 30 : 10) + insets.bottom, 
           borderTopWidth: 0, 
           backgroundColor: theme.card,
           elevation: 10,
@@ -108,18 +106,10 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Ana Sayfa" component={HomeStack} />
-      <Tab.Screen 
-        name="KütüphaneTab" 
-        component={LibraryStack} 
-        options={{ tabBarLabel: 'Kütüphane' }} 
-      />
+      <Tab.Screen name="KütüphaneTab" component={LibraryStack} options={{ tabBarLabel: 'Kütüphane' }} />
       <Tab.Screen name="Favoriler" component={FavoritesScreen} /> 
       <Tab.Screen name="Zikirmatik" component={ZikirScreen} />
-      <Tab.Screen 
-        name="AyarlarTab" 
-        component={SettingsStack} 
-        options={{ tabBarLabel: 'Ayarlar' }} 
-      />
+      <Tab.Screen name="AyarlarTab" component={SettingsStack} options={{ tabBarLabel: 'Ayarlar' }} />
     </Tab.Navigator>
   );
 }
@@ -133,8 +123,6 @@ function RootNavigator({ isFirstLaunch }) {
     >
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="MainTabs" component={MainTabs} />
-      
-      {/* GLOBAL EKRANLAR */}
       <Stack.Screen name="ChatScreen" component={ChatScreen} /> 
       <Stack.Screen name="Qibla" component={QiblaScreen} />
       <Stack.Screen name="Mosque" component={MosqueScreen} />
@@ -148,58 +136,45 @@ export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [isFirstLaunch, setIsFirstLaunch] = useState(null);
 
-  // 🔥 SES KANALLARINI KURMA FONKSİYONU
   async function setupNotificationChannels() {
     if (Platform.OS === 'android') {
       try {
-        // 1. Ney Sesi
         await Notifications.setNotificationChannelAsync('ney', {
           name: 'Ney Sesi 🎶',
           importance: Notifications.AndroidImportance.MAX,
-          sound: 'ney.wav', // Dosya adı (uzantılı)
+          sound: 'ney.wav', 
           vibrationPattern: [0, 250, 250, 250],
         });
-
-        // 2. Kuş Cıvıltısı
         await Notifications.setNotificationChannelAsync('kus-civiltisi', {
           name: 'Kuş Cıvıltısı 🐦',
           importance: Notifications.AndroidImportance.MAX,
           sound: 'kuscivilti.wav', 
           vibrationPattern: [0, 250, 250, 250],
         });
-
-        // 3. Rüzgar Çanı
         await Notifications.setNotificationChannelAsync('ruzgar-cani', {
           name: 'Rüzgar Çanı 🎐',
           importance: Notifications.AndroidImportance.MAX,
           sound: 'ruzgarcan.wav',
           vibrationPattern: [0, 250, 250, 250],
         });
-
-        // 4. Derin Çınlama
         await Notifications.setNotificationChannelAsync('tibetan-bowl', {
           name: 'Derin Çınlama 🧘',
           importance: Notifications.AndroidImportance.MAX,
           sound: 'thunderbowl.wav',
           vibrationPattern: [0, 250, 250, 250],
         });
-
-        // 5. Klasik
         await Notifications.setNotificationChannelAsync('klasik', {
           name: 'Klasik 🎸',
           importance: Notifications.AndroidImportance.MAX,
           sound: 'arabicsounds.wav',
           vibrationPattern: [0, 250, 250, 250],
         });
-
-        // 6. Varsayılan Kanal (Default)
         await Notifications.setNotificationChannelAsync('default', {
           name: 'Varsayılan',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#FF231F7C',
         });
-
         console.log("✅ Bildirim kanalları kuruldu.");
       } catch (error) {
         console.log("❌ Kanal kurma hatası:", error);
@@ -211,8 +186,6 @@ export default function App() {
     async function prepare() {
       try {
         await initDB();
-        
-        // 🔥 Kanalları kur
         await setupNotificationChannels();
 
         const alreadyLaunched = await AsyncStorage.getItem('alreadyLaunched');
@@ -242,14 +215,17 @@ export default function App() {
 
   return (
     <GlobalErrorBoundary>
-      <ThemeProvider>
-        <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-          <NavigationContainer ref={navigationRef}>
-             <RootNavigator isFirstLaunch={isFirstLaunch} />
-             <GlobalAIOverlay /> 
-          </NavigationContainer>
-        </View>
-      </ThemeProvider>
+      {/* 🔥 EKLENDİ: Tüm uygulamayı SafeAreaProvider ile sardık */}
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+            <NavigationContainer ref={navigationRef}>
+               <RootNavigator isFirstLaunch={isFirstLaunch} />
+               <GlobalAIOverlay /> 
+            </NavigationContainer>
+          </View>
+        </ThemeProvider>
+      </SafeAreaProvider>
     </GlobalErrorBoundary>
   );
 }

@@ -5,47 +5,48 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
-import { Heart, Compass, Sparkles, Landmark, Smartphone, Mic, ArrowRight } from 'lucide-react-native';
+import { Heart, Compass, Sparkles, Landmark, BookOpen, CheckCircle2, ArrowRight } from 'lucide-react-native'; // İkonlar güncellendi
 import * as Haptics from 'expo-haptics';
 
 const { width, height } = Dimensions.get('window');
 const IS_SMALL_SCREEN = height < 700;
 
+// 🔥 SLIDES İÇERİĞİ ŞU ANKİ GERÇEK YETENEKLERE GÖRE GÜNCELLENDİ
 const SLIDES = [
   {
     id: '1',
-    title: 'Ecdadın Mirası',
-    description: 'Osmanlı şaheserlerinin gizli hikayelerini keşfet, taşın duaya dönüş yolculuğuna şahit ol. 🕌',
-    icon: Landmark,
-    color: '#D4AF37', // Altın Sarısı
+    title: 'Gönül Dünyana Hoş Geldin',
+    description: 'Her güne özel seçilmiş taze bir Ayet, Hadis ve Esma ile maneviyatını besle. 📖',
+    icon: BookOpen,
+    color: '#2D5A27', // Yoldaş Yeşili
   },
   {
     id: '2',
-    title: 'Yoldaş AI Yanında',
-    description: 'Aklına takılan her şeyi sor. İbadetlerin manevi derinliğini ve sırlarını Yoldaş AI ile konuşarak keşfet. ✨',
+    title: 'Dert Ortağın Yoldaş',
+    description: 'Manevi konularda aklına takılanları sor, dertleş. Yoldaş AI, samimi ve güvenilir cevaplarıyla hep yanında. ✨',
     icon: Sparkles,
-    color: '#5856D6',
+    color: '#5856D6', // Bilgelik Moru
   },
   {
     id: '3',
-    title: 'Salla ve Dertleş',
-    description: 'Telefonunu sallaman yeterli! Yoldaş her an dert ortağın olmaya, seni dinlemeye hazır. 🤝',
-    icon: Smartphone,
-    color: '#FF9500',
+    title: 'Ecdadın İzinde',
+    description: 'Osmanlı cami ve türbelerinin gizli kalmış hikayelerini keşfet, taşın duaya dönüşüne şahit ol. 🕌',
+    icon: Landmark,
+    color: '#D4AF37', // Osmanlı Altını
   },
   {
     id: '4',
-    title: 'Sesinle Bağ Kur',
-    description: 'Yazmaya vaktin yoksa sesinle sor. Akıllı asistanın seni dinler ve gönlüne şifa olacak cevaplar verir. 🎤',
-    icon: Mic,
-    color: '#FF2D55',
+    title: 'İstikrar ve Motivasyon',
+    description: 'Günlük ibadet hedeflerini belirle, istikrar tablonu oluştur ve zinciri kırmadan devam et! 💪',
+    icon: CheckCircle2,
+    color: '#FF9500', // Enerji Turuncusu
   },
   {
     id: '5',
-    title: 'Manevi Rehberin',
-    description: 'Zikirlerin, kıblen ve namaz vakitlerin... Hepsi tek bir çatı altında, senin yol arkadaşın.',
+    title: 'Pusulan ve Vaktin',
+    description: 'Kıble yönünü bul, namaz ve imsakiye vakitlerini asla kaçırma. Tüm manevi araçların tek bir yerde.',
     icon: Compass,
-    color: '#2D5A27',
+    color: '#007AFF', // Güven Mavisi
   }
 ];
 

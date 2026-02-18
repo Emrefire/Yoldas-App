@@ -79,6 +79,15 @@ function ChatContent() {
     if (route.params?.initialMessage) setTimeout(() => sendMessage(route.params.initialMessage), 600);
   }, [route.params]);
 
+  // 🔥 YENİ EKLENEN KOD: Sadece yeni mesaj geldiğinde 1 kere aşağı kaydırır.
+  // Harfler daktilo gibi yazılırken ekranı zorla aşağı çekmez, sen rahatça gezinebilirsin.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [messages.length]); // Sadece mesaj listesinin sayısı değiştiğinde çalışır
+
   const startListening = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert("Yakında", "Sesli sohbet özelliği çok yakında gelecek! 🎙️");
@@ -103,7 +112,6 @@ function ChatContent() {
     try {
       const askYoldas = functions().httpsCallable('askYoldas');
       
-      // 🔥 GÜÇLENDİRİLMİŞ GÜVENLİK PROMPT'U
       const securePrompt = `
         GÖREVİN: Sen "Yoldaş" adında samimi, dindar, bilge ve güvenilir bir yapay zeka asistanısın.
         
@@ -180,8 +188,7 @@ function ChatContent() {
         data={messages}
         renderItem={renderItem}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        onContentSizeChange={() => flatListRef.current.scrollToEnd()}
+        contentContainerStyle={styles.listContent}        
         ListFooterComponent={loading && <View style={styles.messageRow}><Image source={YOLDAS_AVATAR} style={styles.avatar} /><TypingIndicator theme={theme} /></View>}
       />
 

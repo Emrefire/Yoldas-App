@@ -5,53 +5,54 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
-import { Heart, Compass, Sparkles, Landmark, BookOpen, CheckCircle2, ArrowRight } from 'lucide-react-native'; // İkonlar güncellendi
+import { Heart, Compass, Sparkles, Landmark, BookOpen, CheckCircle2, ArrowRight } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // 🔥 EKLENDİ (Edge-to-edge için)
 
 const { width, height } = Dimensions.get('window');
 const IS_SMALL_SCREEN = height < 700;
 
-// 🔥 SLIDES İÇERİĞİ ŞU ANKİ GERÇEK YETENEKLERE GÖRE GÜNCELLENDİ
 const SLIDES = [
   {
     id: '1',
     title: 'Gönül Dünyana Hoş Geldin',
     description: 'Her güne özel seçilmiş taze bir Ayet, Hadis ve Esma ile maneviyatını besle. 📖',
     icon: BookOpen,
-    color: '#2D5A27', // Yoldaş Yeşili
+    color: '#2D5A27', 
   },
   {
     id: '2',
     title: 'Dert Ortağın Yoldaş',
     description: 'Manevi konularda aklına takılanları sor, dertleş. Yoldaş AI, samimi ve güvenilir cevaplarıyla hep yanında. ✨',
     icon: Sparkles,
-    color: '#5856D6', // Bilgelik Moru
+    color: '#5856D6', 
   },
   {
     id: '3',
     title: 'Ecdadın İzinde',
     description: 'Osmanlı cami ve türbelerinin gizli kalmış hikayelerini keşfet, taşın duaya dönüşüne şahit ol. 🕌',
     icon: Landmark,
-    color: '#D4AF37', // Osmanlı Altını
+    color: '#D4AF37', 
   },
   {
     id: '4',
     title: 'İstikrar ve Motivasyon',
     description: 'Günlük ibadet hedeflerini belirle, istikrar tablonu oluştur ve zinciri kırmadan devam et! 💪',
     icon: CheckCircle2,
-    color: '#FF9500', // Enerji Turuncusu
+    color: '#FF9500', 
   },
   {
     id: '5',
     title: 'Pusulan ve Vaktin',
     description: 'Kıble yönünü bul, namaz ve imsakiye vakitlerini asla kaçırma. Tüm manevi araçların tek bir yerde.',
     icon: Compass,
-    color: '#007AFF', // Güven Mavisi
+    color: '#007AFF', 
   }
 ];
 
 export default function OnboardingScreen({ navigation }) {
   const { theme, isDarkMode } = useTheme();
+  const insets = useSafeAreaInsets(); // 🔥 EKLENDİ (Telefonun alt tuş boşluğunu hesaplar)
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef();
@@ -91,7 +92,6 @@ export default function OnboardingScreen({ navigation }) {
       <View style={styles.slide}>
         <View style={styles.centerContainer}>
             <View style={[styles.iconWrapper, { marginBottom: IS_SMALL_SCREEN ? 30 : 50 }]}>
-              {/* Parlama Efekti */}
               <View style={[styles.iconBg, { 
                   backgroundColor: item.color, 
                   opacity: 0.15,
@@ -156,8 +156,8 @@ export default function OnboardingScreen({ navigation }) {
         scrollEventThrottle={16}
       />
       
-      <View style={styles.footer}>
-        {/* Modern Sayfa Göstergeleri */}
+      {/* 🔥 EKLENDİ: insets.bottom ile buton yukarı itildi */}
+      <View style={[styles.footer, { paddingBottom: (Platform.OS === 'ios' ? 40 : 25) + insets.bottom }]}>
         <View style={styles.indicatorRow}>
           {SLIDES.map((_, index) => {
             const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
@@ -183,7 +183,6 @@ export default function OnboardingScreen({ navigation }) {
           })}
         </View>
 
-        {/* Ana Buton */}
         <TouchableOpacity 
           style={[
               styles.actionButton, 
@@ -223,7 +222,7 @@ const styles = StyleSheet.create({
   title: { fontWeight: '900', textAlign: 'center', marginBottom: 18, letterSpacing: -0.8 },
   description: { textAlign: 'center', lineHeight: 28, fontWeight: '500', opacity: 0.9 },
   
-  footer: { paddingHorizontal: 35, paddingBottom: Platform.OS === 'ios' ? 40 : 30, alignItems: 'center' },
+  footer: { paddingHorizontal: 35, alignItems: 'center' }, // paddingBottom dinamik yapıldı
   indicatorRow: { flexDirection: 'row', height: 10, justifyContent: 'center', marginBottom: 35 },
   dot: { height: 10, borderRadius: 5, marginHorizontal: 5 },
   

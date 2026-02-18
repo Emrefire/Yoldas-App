@@ -8,8 +8,8 @@ import { Send, ArrowLeft, Sparkles, Mic } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // 🔥 EKLENDİ (Edge-to-edge için)
 
-// 🔥 Native Firebase Functions (App Check ile otomatik çalışır)
 import functions from '@react-native-firebase/functions';
 
 const YOLDAS_AVATAR = require('../../assets/yoldasavatar.png');
@@ -17,6 +17,32 @@ const YOLDAS_AVATAR = require('../../assets/yoldasavatar.png');
 const WELCOME_MESSAGES = [
   "Selamün Aleyküm cancağızım! 👋\n\nBen Yoldaş. Manevi konularda hasbihal etmek, dertleşmek veya bilgi almak istersen buradayım. 🌿",
 ];
+
+// 🔥 YENİ: Markdown Yıldızlarını (**) Kalın Metne Çeviren Fonksiyon
+const renderFormattedText = (text, theme, isUser) => {
+  if (isUser) {
+    return <Text style={[styles.messageText, { color: '#FFF' }]}>{text}</Text>;
+  }
+
+  // Metni ** işaretlerine göre böler
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  
+  return (
+    <Text style={[styles.messageText, { color: theme.text }]}>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          // Yıldızları temizle ve kalın (bold) yap
+          return (
+            <Text key={index} style={{ fontWeight: 'bold', fontSize: 17 }}>
+              {part.substring(2, part.length - 2)}
+            </Text>
+          );
+        }
+        return <Text key={index}>{part}</Text>;
+      })}
+    </Text>
+  );
+};
 
 const TypewriterMessage = ({ text, theme, onComplete }) => {
   const [displayedText, setDisplayedText] = useState('');
@@ -34,7 +60,8 @@ const TypewriterMessage = ({ text, theme, onComplete }) => {
     }
   }, [currentIndex, text]);
 
-  return <Text style={[styles.messageText, { color: theme.text }]}>{displayedText}</Text>;
+  // Daktilo efekti bitene kadar normal, bitince kalınlaştırmalı (renderFormattedText) gösteririz
+  return renderFormattedText(displayedText, theme, false);
 };
 
 const TypingIndicator = ({ theme }) => {
@@ -66,6 +93,7 @@ function ChatContent() {
   const navigation = useNavigation();
   const route = useRoute();
   const { theme, isDarkMode } = useTheme();
+  const insets = useSafeAreaInsets(); // 🔥 EKLENDİ
   
   const [messages, setMessages] = useState([{ id: '1', text: WELCOME_MESSAGES[0], sender: 'bot', animate: false }]);
   const [inputText, setInputText] = useState('');
@@ -79,14 +107,12 @@ function ChatContent() {
     if (route.params?.initialMessage) setTimeout(() => sendMessage(route.params.initialMessage), 600);
   }, [route.params]);
 
-  // 🔥 YENİ EKLENEN KOD: Sadece yeni mesaj geldiğinde 1 kere aşağı kaydırır.
-  // Harfler daktilo gibi yazılırken ekranı zorla aşağı çekmez, sen rahatça gezinebilirsin.
   useEffect(() => {
     const timer = setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
     return () => clearTimeout(timer);
-  }, [messages.length]); // Sadece mesaj listesinin sayısı değiştiğinde çalışır
+  }, [messages.length]); 
 
   const startListening = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -122,7 +148,7 @@ function ChatContent() {
         
         ✅ CEVAP TARZI:
         - Uzunluk: Konuyu eksik bırakma ama gereksiz uzatma. Öz ve doyurucu olsun.
-        - Liste: Eğer namazın farzları gibi bir şey sorulursa maddeler halinde yaz.
+        - Liste: Eğer namazın farzları gibi bir şey sorulursa maddeler halinde yaz. Listeleri numaralandır ve başlıklarını ** (yıldız) içine al.
         - Üslup: "Cancağızım", "Aziz dostum", "Güzel kardeşim" gibi samimi hitaplar kullan.
         
         Kullanıcı Sorusu: ${userText}
@@ -162,7 +188,8 @@ function ChatContent() {
           {!isUser && item.animate ? (
             <TypewriterMessage text={item.text} theme={theme} onComplete={() => setInputLocked(false)} />
           ) : (
-            <Text style={[styles.messageText, { color: isUser ? '#FFF' : theme.text }]}>{item.text}</Text>
+            // 🔥 YENİ: Kalın yazıları işleyen fonksiyonu burada çağırıyoruz
+            renderFormattedText(item.text, theme, isUser)
           )}
         </View>
       </View>
@@ -192,8 +219,9 @@ function ChatContent() {
         ListFooterComponent={loading && <View style={styles.messageRow}><Image source={YOLDAS_AVATAR} style={styles.avatar} /><TypingIndicator theme={theme} /></View>}
       />
 
+      {/* 🔥 EKLENDİ: paddingBottom değerine insets.bottom ekledik ki tuşların altında kalmasın */}
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}>
-        <View style={styles.inputArea}>
+        <View style={[styles.inputArea, { paddingBottom: (Platform.OS === 'ios' ? 25 : 15) + insets.bottom }]}>
           <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <TouchableOpacity onPress={startListening} style={styles.actionBtn}>
                 <Mic size={22} color={theme.primary} />
@@ -245,7 +273,7 @@ const styles = StyleSheet.create({
   typingBubble: { padding: 12, borderRadius: 18, borderBottomLeftRadius: 4 },
   typingRow: { flexDirection: 'row', alignItems: 'center', height: 10 },
   dot: { width: 6, height: 6, borderRadius: 3, marginHorizontal: 2 },
-  inputArea: { padding: 12, paddingBottom: Platform.OS === 'ios' ? 25 : 15 },
+  inputArea: { padding: 12 }, // Padding bottom'ı dinamik olarak yukarıda ayarladık
   inputContainer: { flexDirection: 'row', alignItems: 'center', borderRadius: 30, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
   actionBtn: { padding: 10 },
   input: { flex: 1, maxHeight: 100, paddingVertical: 8, fontSize: 16 },

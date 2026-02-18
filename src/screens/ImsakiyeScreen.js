@@ -11,9 +11,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext'; 
 
 const { width } = Dimensions.get('window');
-const CALENDAR_API_URL = "https://api.aladhan.com/v1/calendar";
+const CALENDAR_API_URL = process.env.EXPO_PUBLIC_CALENDAR_API_URL;
 
-// --- GARANTİLİ TÜRKÇE GÜN/AY SÖZLÜĞÜ ---
 const TR_GUNLER = {
   "Sunday": "Pazar", "Monday": "Pazartesi", "Tuesday": "Salı", "Wednesday": "Çarşamba",
   "Thursday": "Perşembe", "Friday": "Cuma", "Saturday": "Cumartesi"
@@ -24,31 +23,17 @@ const TR_AYLAR = {
   "July": "Temmuz", "August": "Ağustos", "September": "Eylül", "October": "Ekim", "November": "Kasım", "December": "Aralık"
 };
 
-// 🔥 SÜPER HİCRİ SÖZLÜK (Tüm varyasyonları yakalar)
 const TR_HICRI_AYLAR = {
-  // Muharrem
-  "Muharram": "Muharrem", "al-Muḥarram": "Muharrem",
-  // Safer
-  "Safar": "Safer", 
-  // Rebiülevvel
+  "Muharram": "Muharrem", "al-Muḥarram": "Muharrem", "Safar": "Safer", 
   "Rabi' al-awwal": "Rebiülevvel", "Rabi' al-Awwal": "Rebiülevvel", "Rabī‘ al-awwal": "Rebiülevvel",
-  // Rebiülahir
   "Rabi' al-thani": "Rebiülahir", "Rabi' al-Thani": "Rebiülahir", "Rabī‘ al-thānī": "Rebiülahir",
-  // Cemaziyelevvel
   "Jumada al-awwal": "Cemaziyelevvel", "Jumādā al-ūlā": "Cemaziyelevvel",
-  // Cemaziyelahir
   "Jumada al-thani": "Cemaziyelahir", "Jumādā al-ākhirah": "Cemaziyelahir",
-  // Recep
   "Rajab": "Recep",
-  // Şaban (Burası kritik)
   "Sha'ban": "Şaban", "Shaban": "Şaban", "Sha‘bān": "Şaban","Sha’bān": "Şaban",
-  // Ramazan
   "Ramadan": "Ramazan", "Ramadhan": "Ramazan", "Ramaḍān": "Ramazan",
-  // Şevval
   "Shawwal": "Şevval", "Shawwāl": "Şevval",
-  // Zilkade
   "Dhu al-Qi'dah": "Zilkade", "Dhul Qadah": "Zilkade", "Dhū al-Qa‘dah": "Zilkade",
-  // Zilhicce
   "Dhu al-Hijjah": "Zilhicce", "Dhul Hijjah": "Zilhicce", "Dhū al-Ḥijjah": "Zilhicce"
 };
 
@@ -64,7 +49,7 @@ export default function ImsakiyeScreen() {
   const [hijriDateStr, setHijriDateStr] = useState("");
   
   const [countdown, setCountdown] = useState("--:--:--");
-  const [nextVakitName, setNextVakitName] = useState("Vakit Hesaplanıyor");
+  const [nextVakitName, setNextVakitName] = useState("Vakit Hesaplanıyor...");
 
   useFocusEffect(
     useCallback(() => {
@@ -73,11 +58,13 @@ export default function ImsakiyeScreen() {
   );
 
   useEffect(() => {
-    if (imsakiyeData.length > 0) {
+    if (imsakiyeData.length > 0 && currentDayIndex !== -1) {
+      // Sayfaya girer girmez ilk hesabı yap, bekletme!
+      calculateCountdown();
       const timer = setInterval(calculateCountdown, 1000);
       return () => clearInterval(timer);
     }
-  }, [imsakiyeData]);
+  }, [imsakiyeData, currentDayIndex]);
 
   const fetchTwoMonthsData = async () => {
     setLoading(true);
@@ -140,11 +127,13 @@ export default function ImsakiyeScreen() {
       const finalList = [{ type: 'table_header' }, ...processedList];
       setImsakiyeData(finalList);
       
-      const todayStr = formatDateForMatch(new Date());
-      const todayData = rawList.find(d => d.date.gregorian.date === todayStr);
+      // 🔥 BUGÜNÜ BULMA (Garanti Yöntem)
+      const d = new Date();
+      const todayStr = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+      
+      const todayData = rawList.find(d => d.date && d.date.gregorian.date === todayStr);
       if(todayData) {
         const hMonthEng = todayData.date.hijri.month.en;
-        // 🔥 Gelişmiş sözlükten kontrol et, bulamazsan orijinalini koy
         const hMonthTr = TR_HICRI_AYLAR[hMonthEng] || hMonthEng; 
         setHijriDateStr(`${todayData.date.hijri.day} ${hMonthTr} ${todayData.date.hijri.year}`);
       }
@@ -157,70 +146,89 @@ export default function ImsakiyeScreen() {
         if (flatListRef.current && foundIndex !== -1) {
           flatListRef.current.scrollToIndex({ index: foundIndex, animated: true, viewPosition: 0.15 });
         }
-      }, 600);
+      }, 500);
 
     } catch (error) {
-      console.error(error);
+      console.error("Imsakiye API Hatası:", error);
       setLoading(false);
+      setNextVakitName("Bağlantı Hatası");
+      setCountdown("--:--:--");
     }
   };
 
-  const formatDateForMatch = (date) => {
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = date.getFullYear();
-    return `${d}-${m}-${y}`;
-  };
-
+  // 🔥 GERİ SAYIM (Sorunsuz Matematiksel Yöntem)
   const calculateCountdown = () => {
     if (currentDayIndex === -1 || !imsakiyeData[currentDayIndex]) return;
     
     const todayData = imsakiyeData[currentDayIndex];
-    if (!todayData.timings) return; 
+    if (!todayData || !todayData.timings) return; 
 
     const timings = todayData.timings;
     const now = new Date();
     
-    const dateParts = todayData.date.gregorian.date.split('-');
+    // Güvenli Tarih Ayrıştırma
+    const dateParts = todayData.date.gregorian.date.split('-'); // Format: DD-MM-YYYY
+    const year = parseInt(dateParts[2], 10);
+    const month = parseInt(dateParts[1], 10) - 1; // JS'de aylar 0'dan başlar
+    const day = parseInt(dateParts[0], 10);
+
     const parseTime = (timeStr) => {
-      const [h, m] = timeStr.split(' ')[0].split(':');
-      const d = new Date(parseInt(dateParts[2]), parseInt(dateParts[1])-1, parseInt(dateParts[0]));
-      d.setHours(parseInt(h), parseInt(m), 0);
-      return d;
+      const [timeMatch] = timeStr.split(' '); // Saat kısmını al ("05:30 (EEST)" -> "05:30")
+      const [h, m] = timeMatch.split(':').map(num => parseInt(num, 10));
+      return new Date(year, month, day, h, m, 0);
     };
 
     const imsakTime = parseTime(timings.Fajr);
     const aksamTime = parseTime(timings.Maghrib);
+    
     let targetTime, label;
 
     if (now < imsakTime) {
-      targetTime = imsakTime; label = "Sahura Kalan";
+      targetTime = imsakTime; 
+      label = "Sahura Kalan";
     } else if (now < aksamTime) {
-      targetTime = aksamTime; label = "İftara Kalan";
+      targetTime = aksamTime; 
+      label = "İftara Kalan";
     } else {
+      // Yarına (Sonraki güne) geçiş
       let nextIndex = currentDayIndex + 1;
-      while (nextIndex < imsakiyeData.length && !imsakiyeData[nextIndex].timings) {
+      while (nextIndex < imsakiyeData.length && (!imsakiyeData[nextIndex] || !imsakiyeData[nextIndex].timings)) {
           nextIndex++;
       }
 
       if (imsakiyeData[nextIndex] && imsakiyeData[nextIndex].timings) {
-         const nextParts = imsakiyeData[nextIndex].date.gregorian.date.split('-');
-         const dNext = new Date(parseInt(nextParts[2]), parseInt(nextParts[1])-1, parseInt(nextParts[0]));
-         const [h, m] = imsakiyeData[nextIndex].timings.Fajr.split(' ')[0].split(':');
-         dNext.setHours(parseInt(h), parseInt(m), 0);
-         targetTime = dNext;
+         const nextData = imsakiyeData[nextIndex];
+         const nextParts = nextData.date.gregorian.date.split('-');
+         const nYear = parseInt(nextParts[2], 10);
+         const nMonth = parseInt(nextParts[1], 10) - 1;
+         const nDay = parseInt(nextParts[0], 10);
+         
+         const [nextTimeMatch] = nextData.timings.Fajr.split(' ');
+         const [nH, nM] = nextTimeMatch.split(':').map(num => parseInt(num, 10));
+         targetTime = new Date(nYear, nMonth, nDay, nH, nM, 0);
       } else {
-         targetTime = new Date(imsakTime); targetTime.setDate(targetTime.getDate() + 1);
+         // Veri bittiyse (ayın sonu) varsayılan olarak +1 gün ekle
+         targetTime = new Date(imsakTime.getTime() + 24 * 60 * 60 * 1000); 
       }
       label = "Yarın Sahura";
     }
 
-    const diff = targetTime - now;
-    if (diff < 0) return;
+    const diff = targetTime.getTime() - now.getTime();
+    if (diff <= 0) {
+        setCountdown("00:00:00");
+        return;
+    }
+
     const h = Math.floor(diff / (1000 * 60 * 60));
     const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const s = Math.floor((diff % (1000 * 60)) / 1000);
-    setCountdown(`${h}sa ${m}dk ${s}sn`);
+    
+    // Saatleri 05:08:09 formatında göstermek için padStart
+    const formattedH = String(h).padStart(2, '0');
+    const formattedM = String(m).padStart(2, '0');
+    const formattedS = String(s).padStart(2, '0');
+
+    setCountdown(`${formattedH}:${formattedM}:${formattedS}`);
     setNextVakitName(label);
   };
 
@@ -279,7 +287,6 @@ export default function ImsakiyeScreen() {
     const trDayName = TR_GUNLER[engDayName] || engDayName;
     const trMonthName = TR_AYLAR[engMonthName] || engMonthName;
 
-    // 🔥 HİCRİ AY (Süper Sözlük Devrede)
     const engHijriMonth = item.date.hijri.month.en;
     const trHijriMonth = TR_HICRI_AYLAR[engHijriMonth] || engHijriMonth;
 
@@ -357,7 +364,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center' },
   listContent: { paddingBottom: 40 },
 
-  // --- Header Card ---
   headerCardWrapper: { paddingHorizontal: 16, marginBottom: 10 },
   timerCard: { 
     padding: 16, borderRadius: 24, overflow: 'hidden', height: 160, 
@@ -373,18 +379,16 @@ const styles = StyleSheet.create({
 
   timerMain: { alignItems: 'center', justifyContent: 'center', flex: 1, zIndex: 2, paddingBottom: 10 },
   timerLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 5 },
-  timerValue: { color: '#FFF', fontSize: 42, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.1)', textShadowOffset: {width:0, height:2}, textShadowRadius: 4 },
+  timerValue: { color: '#FFF', fontSize: 42, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.1)', textShadowOffset: {width:0, height:2}, textShadowRadius: 4, fontVariant: ['tabular-nums'] }, // tabular-nums eklendi (saat atlamaması için)
   
   bgIcon: { position: 'absolute', right: -20, bottom: -20, opacity: 0.1 },
 
-  // --- Month Header Styles ---
   monthHeaderContainer: { 
     paddingHorizontal: 20, paddingVertical: 15, flexDirection: 'row', alignItems: 'center' 
   },
   monthHeaderText: { fontSize: 18, fontWeight: '800', marginRight: 10 },
   monthHeaderLine: { flex: 1, height: 1, opacity: 0.5 },
 
-  // --- Table Header Styles ---
   tableHeader: { 
     flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 16, 
     borderBottomWidth: 1, elevation: 2, zIndex: 100, 
@@ -393,7 +397,6 @@ const styles = StyleSheet.create({
   colDateHeader: { width: '14%', textAlign: 'center', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   colTimeHeader: { flex: 1, textAlign: 'center', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
 
-  // --- Day Block Styles ---
   dayBlock: { 
     marginHorizontal: 16, marginVertical: 6, padding: 16, borderRadius: 20, 
     borderWidth: 1, elevation: 2, position: 'relative', overflow: 'hidden'

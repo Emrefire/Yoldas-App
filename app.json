@@ -67,9 +67,8 @@
     "expo-build-properties",
     {
       "android": {
-        "compileSdkVersion": 34,
-      "targetSdkVersion": 34,
-      "buildToolsVersion": "34.0.0",
+        "compileSdkVersion": 36,
+      "targetSdkVersion": 36,
         "usesCleartextTraffic": true,
         "enableMultidex": true
       }

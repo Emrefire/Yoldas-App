@@ -11,9 +11,9 @@ export default function PrivacyPolicyScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
 
-  // 🔴 BURAYA SİTEDEN ALDIĞIN LİNKİ YAPIŞTIR
-// 👇 Senin oluşturduğun Google Docs linkini buraya koyduk
-const POLICY_URL = "https://docs.google.com/document/d/15LeLTMcl9zLOd8_8VgBS2T5g3EU--zae488bvZQEOAo/edit?usp=sharing";
+  // 🔥 URL ARTIK GÜVENLİ BÖLGEDEN (ENV) ÇEKİLİYOR
+  const POLICY_URL = process.env.EXPO_PUBLIC_POLICY_URL;
+  
   const openFullPolicy = () => {
     Linking.openURL(POLICY_URL).catch(err => console.error("Link açılamadı", err));
   };

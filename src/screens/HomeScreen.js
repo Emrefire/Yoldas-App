@@ -9,7 +9,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { 
   CheckCircle2, Heart, Share2, MapPin, Plus, X, BookOpen, 
   Quote, Compass, Trash2, Star, MoonStar, Sparkles, Calendar 
-} from 'lucide-react-native'; // RefreshCw ikonunu kaldırdık
+} from 'lucide-react-native';
 import axios from 'axios';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
@@ -175,11 +175,33 @@ export default function HomeScreen() {
   }, []);
 
   const getLocationAndVakitler = async () => {
-    setLoading(true);
+    if (!vakitler) setLoading(true);
+
     try {
         const useAutoLocationStr = await AsyncStorage.getItem('useAutoLocation');
         const userCity = await AsyncStorage.getItem('userCity');
         const useAutoLocation = useAutoLocationStr !== null ? JSON.parse(useAutoLocationStr) : true;
+
+        const todayStr = new Date().toDateString();
+        const cachedStr = await AsyncStorage.getItem('cached_vakitler');
+        
+        if (cachedStr) {
+            const cached = JSON.parse(cachedStr);
+            if (
+                cached.date === todayStr && 
+                cached.settingAuto === useAutoLocation && 
+                cached.settingCity === userCity
+            ) {
+                setVakitler(cached.timings);
+                setHijriMonth(cached.hijri);
+                setLocationName(cached.location);
+                setLoading(false);
+                return; 
+            }
+        }
+
+        setLoading(true); 
+        
         let queryLat, queryLon, displayName;
 
         if (!useAutoLocation && userCity) {
@@ -195,7 +217,7 @@ export default function HomeScreen() {
         } else {
             let { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                setLocationName('İstanbul (İzin Yok)');
+                displayName = 'İstanbul (İzin Yok)';
                 queryLat = 41.0082; queryLon = 28.9784;
             } else {
                 let location = await Location.getCurrentPositionAsync({});
@@ -223,7 +245,9 @@ export default function HomeScreen() {
             timings: fetchedTimings,
             hijri: fetchedHijri,
             location: displayName,
-            date: new Date().toDateString() 
+            date: todayStr,
+            settingAuto: useAutoLocation,
+            settingCity: userCity
         };
         await AsyncStorage.setItem('cached_vakitler', JSON.stringify(cacheData));
 
@@ -232,15 +256,11 @@ export default function HomeScreen() {
             const cachedStr = await AsyncStorage.getItem('cached_vakitler');
             if (cachedStr) {
                 const cached = JSON.parse(cachedStr);
-                const today = new Date().toDateString();
-
-                if (cached.date === today) {
-                    setVakitler(cached.timings);
-                    setHijriMonth(cached.hijri);
-                    setLocationName(`${cached.location} (Çevrimdışı)`);
-                    setLoading(false);
-                    return; 
-                }
+                setVakitler(cached.timings);
+                setHijriMonth(cached.hijri);
+                setLocationName(`${cached.location} (Çevrimdışı)`);
+                setLoading(false);
+                return; 
             }
         } catch (cacheError) {
             console.log("Cache okuma hatası:", cacheError);
@@ -350,9 +370,8 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, [vakitler]);
 
-  // 🔥 GÜNLÜK AYET MANTIĞI
   const fetchAyet = async () => {
-    setAyetLoading(true);
+    if (ayet.id === "") setAyetLoading(true); 
     try {
         const today = new Date().toDateString();
         const cachedStr = await AsyncStorage.getItem('daily_ayet');
@@ -367,6 +386,7 @@ export default function HomeScreen() {
             }
         }
 
+        setAyetLoading(true); 
         const randomAyahNum = Math.floor(Math.random() * 6236) + 1;
         const response = await axios.get(`${KURAN_API_URL}/ayah/${randomAyahNum}/tr.diyanet?t=${Date.now()}`, { timeout: 6000 });
         const item = response.data.data;
@@ -386,9 +406,8 @@ export default function HomeScreen() {
     }
   };
 
-  // 🔥 GÜNLÜK HADİS MANTIĞI
   const fetchHadis = async () => {
-    setHadisLoading(true);
+    if (hadis.id === "") setHadisLoading(true);
     try {
         const today = new Date().toDateString();
         const cachedStr = await AsyncStorage.getItem('daily_hadis');
@@ -403,6 +422,7 @@ export default function HomeScreen() {
             }
         }
 
+        setHadisLoading(true);
         const pool = (GUNLUK_HADISLER && GUNLUK_HADISLER.length > 0) ? GUNLUK_HADISLER : [{ text: "Ameller niyetlere göredir.", source: "Buhari" }];
         const randomIndex = Math.floor(Math.random() * pool.length);
         const newHadis = pool[randomIndex];
@@ -420,7 +440,6 @@ export default function HomeScreen() {
     }
   };
 
-  // 🔥 GÜNLÜK ESMA MANTIĞI
   const fetchEsma = async () => {
       try {
           const today = new Date().toDateString();
@@ -604,7 +623,6 @@ export default function HomeScreen() {
           <View style={styles.cardActions}>
             <TouchableOpacity onPress={() => toggleFavoriteItem(ayet, 'ayet')}><Heart size={22} color={isAyetFav ? "#E74C3C" : theme.subText} fill={isAyetFav ? "#E74C3C" : "transparent"} /></TouchableOpacity>
             <TouchableOpacity onPress={() => shareAsImage(ayetRef)} style={styles.actionIcon}><Share2 size={22} color={theme.primary} /></TouchableOpacity>
-            {/* 🔥 Yenileme Tuşu Silindi */}
           </View>
         </View>
 
@@ -623,7 +641,6 @@ export default function HomeScreen() {
               <View style={styles.cardActions}>
                 <TouchableOpacity onPress={() => toggleFavoriteItem(esma, 'esma')}><Heart size={22} color={isEsmaFav ? "#E74C3C" : theme.subText} fill={isEsmaFav ? "#E74C3C" : "transparent"} /></TouchableOpacity>
                 <TouchableOpacity onPress={() => shareAsImage(esmaRef)} style={styles.actionIcon}><Share2 size={22} color={theme.primary} /></TouchableOpacity>
-                {/* 🔥 Yenileme Tuşu Silindi */}
               </View>
             </View>
         )}
@@ -639,7 +656,6 @@ export default function HomeScreen() {
           <View style={styles.cardActions}>
             <TouchableOpacity onPress={() => toggleFavoriteItem(hadis, 'hadis')}><Heart size={22} color={isHadisFav ? "#E74C3C" : theme.subText} fill={isHadisFav ? "#E74C3C" : "transparent"} /></TouchableOpacity>
             <TouchableOpacity onPress={() => shareAsImage(hadisRef)} style={styles.actionIcon}><Share2 size={22} color={theme.primary} /></TouchableOpacity>
-            {/* 🔥 Yenileme Tuşu Silindi */}
           </View>
         </View>
 
@@ -677,14 +693,34 @@ export default function HomeScreen() {
          </View>
       </Modal>
 
-      <Modal animationType="slide" transparent visible={modalVisible}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}><View style={styles.modalOverlay}><KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ width: '100%' }}>
-          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
-            <View style={styles.modalHeader}><Text style={[styles.modalTitle, { color: theme.text }]}>Yeni Hedef Ekle</Text><TouchableOpacity onPress={() => setModalVisible(false)}><X size={24} color={theme.subText} /></TouchableOpacity></View>
-            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.text }]} placeholder="Hedef başlığını yazın..." placeholderTextColor={theme.subText} value={newTaskTitle} onChangeText={setNewTaskTitle} autoFocus />
-            <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={handleSaveTask}><Text style={styles.saveButtonText}>Listeye Ekle</Text></TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView></View></TouchableWithoutFeedback>
+      {/* 🔥 HEDEF EKLEME MODALI KLAVYE DÜZELTMESİ EKLENDİ */}
+      <Modal animationType="slide" transparent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : undefined} 
+          style={{ flex: 1 }}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>Yeni Hedef Ekle</Text>
+                  <TouchableOpacity onPress={() => setModalVisible(false)}><X size={24} color={theme.subText} /></TouchableOpacity>
+                </View>
+                <TextInput 
+                  style={[styles.input, { backgroundColor: theme.background, color: theme.text }]} 
+                  placeholder="Hedef başlığını yazın..." 
+                  placeholderTextColor={theme.subText} 
+                  value={newTaskTitle} 
+                  onChangeText={setNewTaskTitle} 
+                  autoFocus={true} 
+                />
+                <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={handleSaveTask}>
+                  <Text style={styles.saveButtonText}>Listeye Ekle</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal animationType="fade" transparent visible={celebrationVisible}>

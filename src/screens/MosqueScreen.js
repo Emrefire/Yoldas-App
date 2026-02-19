@@ -4,9 +4,10 @@ import {
   ActivityIndicator, Linking, Platform, SafeAreaView, StatusBar, Image, Dimensions 
 } from 'react-native';
 import * as Location from 'expo-location';
-import { ChevronLeft, MapPin, Navigation, Sparkles, MessageCircle, HelpCircle, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, MapPin, Navigation, Sparkles, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 const { width, height } = Dimensions.get('window');
@@ -28,7 +29,15 @@ export default function MosqueScreen({ navigation }) {
   const [errorMsg, setErrorMsg] = useState(null);
 
   useEffect(() => {
-    (async () => {
+    initializeMosques();
+  }, []);
+
+  // 🔥 TURBO YÜKLEME VE CACHE FONKSİYONU
+  const initializeMosques = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Konum izni reddedildi. Yakındaki camileri gösterebilmemiz için konum bilgisi gerekli dostum.');
@@ -36,20 +45,41 @@ export default function MosqueScreen({ navigation }) {
         return;
       }
 
-      try {
-        let loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc.coords);
-        fetchNearbyMosques(loc.coords.latitude, loc.coords.longitude);
-      } catch (e) {
-        setErrorMsg("Konum bilgisine ulaşılamadı. GPS'in açık olduğundan emin misin?");
-        setLoading(false);
+      // 1. Uyduları bekleme, telefonun hafızasındaki son konumu şipşak al
+      let loc = await Location.getLastKnownPositionAsync({});
+      if (!loc) {
+         // Eğer hiç son konum yoksa (çok nadir), mecburen normal GPS al (dengeli doğruluk ile hızlıca)
+         loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       }
-    })();
-  }, []);
 
-  const fetchNearbyMosques = async (lat, lon) => {
+      const lat = loc.coords.latitude;
+      const lon = loc.coords.longitude;
+      setLocation(loc.coords);
+
+      // 2. CACHE KONTROLÜ: Koordinatları yuvarlayıp ~1.5 km'lik bir alanın anahtarını oluşturuyoruz
+      // Böylece sen evde, sokakta veya bakkalda uygulamayı açtığında hep aynı cache'i kullanacak, API'ye gitmeyecek.
+      const cacheKey = `mosques_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+      const cachedData = await AsyncStorage.getItem(cacheKey);
+
+      if (cachedData) {
+         const parsedData = JSON.parse(cachedData);
+         setMosques(parsedData);
+         setLoading(false);
+         return; // Veriyi bulduk, işlemi kes ve anında ekrana bas!
+      }
+
+      // 3. CACHE YOKSA İNTERNETTEN (OVERPASS) ÇEK
+      await fetchNearbyMosquesAPI(lat, lon, cacheKey);
+
+    } catch (e) {
+      setErrorMsg("Konum bilgisine ulaşılamadı. GPS'in açık olduğundan emin misin?");
+      setLoading(false);
+    }
+  };
+
+  const fetchNearbyMosquesAPI = async (lat, lon, cacheKey) => {
     const query = `
-      [out:json][timeout:25];
+      [out:json][timeout:15];
       (
         node["amenity"="place_of_worship"]["religion"="muslim"](around:3000, ${lat}, ${lon});
         way["amenity"="place_of_worship"]["religion"="muslim"](around:3000, ${lat}, ${lon});
@@ -81,6 +111,12 @@ export default function MosqueScreen({ navigation }) {
         setMosques(sortedData);
         success = true; 
         setLoading(false);
+
+        // 🔥 Başarıyla indirdiği veriyi telefonun hafızasına (Cache'e) kaydet
+        if (sortedData.length > 0) {
+           await AsyncStorage.setItem(cacheKey, JSON.stringify(sortedData));
+        }
+        
       } catch (err) {
         console.log(`Sunucu hatası:`, err.message);
       }
@@ -170,19 +206,7 @@ export default function MosqueScreen({ navigation }) {
           <Text style={{ color: theme.subText, textAlign: 'center', marginBottom: 25, fontSize: 16, paddingHorizontal: 40 }}>{errorMsg}</Text>
           <TouchableOpacity 
             style={[styles.retryButton, { backgroundColor: theme.primary }]}
-            onPress={() => {
-                setLoading(true);
-                setErrorMsg(null);
-                (async () => {
-                    try {
-                        let loc = await Location.getCurrentPositionAsync({});
-                        fetchNearbyMosques(loc.coords.latitude, loc.coords.longitude);
-                    } catch {
-                        setErrorMsg("Konum alınamadı.");
-                        setLoading(false);
-                    }
-                })();
-            }}
+            onPress={initializeMosques} // 🔥 Tekrar dene butonunu da temizledik
           >
             <Text style={styles.retryButtonText}>Tekrar Dene</Text>
           </TouchableOpacity>

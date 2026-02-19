@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   StyleSheet, Text, View, Animated, Dimensions, Platform, 
-  SafeAreaView, StatusBar, Image, TouchableOpacity, ScrollView
+  SafeAreaView, StatusBar, TouchableOpacity, ScrollView
 } from 'react-native';
 import { Magnetometer } from 'expo-sensors';
 import * as Location from 'expo-location';
@@ -11,45 +11,83 @@ import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
-// Responsive Pusula Boyutu
 const COMPASS_SIZE = Math.min(width * 0.75, height * 0.35);
 const HALF_SIZE = COMPASS_SIZE / 2;
 
 export default function QiblaScreen() {
   const navigation = useNavigation();
   const { theme, isDarkMode } = useTheme();
+  
   const [heading, setHeading] = useState(0);
   const [qiblaAngle, setQiblaAngle] = useState(0); 
   const [isFocused, setIsFocused] = useState(false);
   const [locationName, setLocationName] = useState("Konum Bekleniyor...");
 
+  // 🔥 PERFORMANS İÇİN REFERANSLAR (Kasmayı önleyen sistem)
+  const isFocusedRef = useRef(false);
+  const qiblaAngleRef = useRef(0);
+  const lastHeadingRef = useRef(0);
+  const cumulativeHeadingRef = useRef(0);
+  const spinAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    getLocationAndQibla();
     let subscription;
-    const _subscribe = () => {
+
+    const startCompass = async () => {
+      await getLocationAndQibla();
+
+      // Pusula veri hızını 100ms yapıyoruz (Gereksiz render'ı engeller, Animasyon ile pürüzsüz akar)
+      Magnetometer.setUpdateInterval(100); 
+      
       subscription = Magnetometer.addListener((data) => {
         let angle = Math.atan2(-data.x, data.y) * (180 / Math.PI);
         if (angle < 0) angle += 360;
-        const currentHeading = Math.round(angle);
-        setHeading(currentHeading);
-        
-        let diff = Math.abs(currentHeading - qiblaAngle);
-        if (diff > 180) diff = 360 - diff;
 
-        if (diff < 5) {
-          if (!isFocused) {
-            setIsFocused(true);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        // 🔥 1. KÜMÜLATİF DÖNÜŞ (360 -> 0 geçerken pusulanın çıldırmasını/geri sarmasını engeller)
+        let diff = angle - lastHeadingRef.current;
+        if (diff > 180) diff -= 360;
+        else if (diff < -180) diff += 360;
+
+        cumulativeHeadingRef.current += diff;
+        lastHeadingRef.current = angle;
+
+        // NATIVE DRIVER İLE YAĞ GİBİ DÖNÜŞ (Telefonun ekran kartını kullanır, kasmayı %100 çözer)
+        Animated.timing(spinAnim, {
+          toValue: -cumulativeHeadingRef.current,
+          duration: 100,
+          useNativeDriver: true,
+        }).start();
+
+        // Rakamları güncelle (Sadece değişirse güncelle ki ekran yorulmasın)
+        const currentHeading = Math.round(angle);
+        setHeading(prev => (Math.abs(prev - currentHeading) >= 1 ? currentHeading : prev));
+        
+        // 🔥 2. KIBLE HESAPLAMA (Render'ı tetiklemeden Ref üzerinden kontrol)
+        let currentQibla = qiblaAngleRef.current;
+        if (currentQibla > 0) {
+          let qDiff = Math.abs(currentHeading - currentQibla);
+          if (qDiff > 180) qDiff = 360 - qDiff;
+
+          if (qDiff <= 3) { 
+            if (!isFocusedRef.current) {
+              isFocusedRef.current = true;
+              setIsFocused(true);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+          } else {
+            if (isFocusedRef.current) {
+              isFocusedRef.current = false;
+              setIsFocused(false);
+            }
           }
-        } else {
-          setIsFocused(false);
         }
       });
-      Magnetometer.setUpdateInterval(60);
     };
-    _subscribe();
+
+    startCompass();
+
     return () => { if (subscription) subscription.remove(); };
-  }, [qiblaAngle, isFocused]);
+  }, []); // <-- Dependency array boş! Artık her kıbleye geldiğinde dinleyici çöküp baştan başlamayacak!
 
   const getLocationAndQibla = async () => {
     try {
@@ -64,7 +102,10 @@ export default function QiblaScreen() {
       const kabeLat = 21.4225; const kabeLng = 39.8262; const PI = Math.PI;
       let angle = (Math.atan2(Math.sin((kabeLng - lng) * PI / 180), Math.cos(lat * PI / 180) * Math.tan(kabeLat * PI / 180) - Math.sin(lat * PI / 180) * Math.cos((kabeLng - lng) * PI / 180)) * 180 / PI);
       if (angle < 0) angle += 360;
-      setQiblaAngle(Math.round(angle));
+      
+      const finalAngle = Math.round(angle);
+      setQiblaAngle(finalAngle);
+      qiblaAngleRef.current = finalAngle; // Ref'i de güncelliyoruz
     } catch (e) { console.log(e); }
   };
 
@@ -75,7 +116,8 @@ export default function QiblaScreen() {
     });
   };
 
-  const renderCompassTicks = () => {
+  // 🔥 PUSULA ÇİZGİLERİNİ HAFIZAYA AL (Telefonu yormasını engeller)
+  const renderCompassTicks = useMemo(() => {
     const ticks = [];
     for (let i = 0; i < 360; i += 15) {
       const isCardinal = i % 90 === 0;
@@ -84,13 +126,19 @@ export default function QiblaScreen() {
       );
     }
     return ticks;
-  };
+  }, [theme]);
+
+  // Animasyonu dereceye çeviren araç
+  const spinInterpolation = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '1deg']
+  });
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 0) + 10 : 0 }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       
-      {/* ÜST BAR (Geri Butonu Dahil) */}
+      {/* ÜST BAR */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: theme.card }]}>
           <ChevronLeft size={28} color={theme.text} />
@@ -116,19 +164,19 @@ export default function QiblaScreen() {
 
         {/* PUSULA MERKEZİ */}
         <View style={styles.compassWrapper}>
-          {/* Hedef Nişangahı */}
           <View style={styles.targetPointer}>
             <View style={[styles.pointerArrow, { borderBottomColor: isFocused ? theme.primary : '#FF3B30' }]} />
             <View style={[styles.pointerLine, { backgroundColor: isFocused ? theme.primary : '#FF3B30' }]} />
           </View>
 
-          <View style={[styles.compassCircle, { 
+          {/* 🔥 DÖNEN PUSULA (Artık Animated.View ve Native Driver kullanıyor) */}
+          <Animated.View style={[styles.compassCircle, { 
             width: COMPASS_SIZE, height: COMPASS_SIZE, borderRadius: COMPASS_SIZE / 2, 
             backgroundColor: theme.card, borderColor: isFocused ? theme.primary : theme.border,
             shadowColor: isFocused ? theme.primary : "#000",
-            transform: [{ rotate: `${-heading}deg` }] 
+            transform: [{ rotate: spinInterpolation }] // Kusursuz dönüş
           }]}>
-            {renderCompassTicks()}
+            {renderCompassTicks}
             <View style={[styles.directionMarker, { transform: [{ translateY: -HALF_SIZE + 30 }] }]}><Text style={[styles.cardinalText, { color: '#FF3B30' }]}>N</Text></View>
             
             <View style={[styles.kabeMarkerContainer, { height: COMPASS_SIZE, transform: [{ rotate: `${qiblaAngle}deg` }] }]}>
@@ -138,7 +186,7 @@ export default function QiblaScreen() {
               </View>
             </View>
             <View style={[styles.centerDot, { backgroundColor: theme.primary, opacity: isFocused ? 0.8 : 0.2 }]} />
-          </View>
+          </Animated.View>
         </View>
 
         {/* BİLGİ KUTUSU */}
@@ -149,7 +197,7 @@ export default function QiblaScreen() {
           </Text>
         </View>
 
-        {/* 🔥 MODERN AI PROMPT BOX */}
+        {/* AI PROMPT BOX */}
         <TouchableOpacity 
             style={[styles.aiBox, { backgroundColor: isDarkMode ? '#1C1C1E' : '#FFFFFF', borderColor: theme.border }]} 
             onPress={startAIChat} 
@@ -220,7 +268,6 @@ const styles = StyleSheet.create({
   },
   infoCardText: { flex: 1, marginLeft: 15, fontSize: 13, fontWeight: '600', lineHeight: 20 },
 
-  // AI BOX (Zikirmatik ile uyumlu)
   aiBox: { 
     flexDirection: 'row', alignItems: 'center', padding: 15, 
     borderRadius: 24, borderWidth: 1, elevation: 4, width: '100%',

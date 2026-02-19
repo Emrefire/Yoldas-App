@@ -11,6 +11,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext'; 
 
 const { width } = Dimensions.get('window');
+
+// 🔥 API LINKI GÜVENLİ BÖLGEDEN (ENV) ÇEKİLİYOR
 const CALENDAR_API_URL = process.env.EXPO_PUBLIC_CALENDAR_API_URL;
 
 const TR_GUNLER = {
@@ -59,24 +61,45 @@ export default function ImsakiyeScreen() {
 
   useEffect(() => {
     if (imsakiyeData.length > 0 && currentDayIndex !== -1) {
-      // Sayfaya girer girmez ilk hesabı yap, bekletme!
       calculateCountdown();
       const timer = setInterval(calculateCountdown, 1000);
       return () => clearInterval(timer);
     }
   }, [imsakiyeData, currentDayIndex]);
 
+  // 🔥 YENİ: KUSURSUZ CACHE (ÖN BELLEK) SİSTEMİ EKLENDİ
   const fetchTwoMonthsData = async () => {
-    setLoading(true);
+    if (imsakiyeData.length === 0) setLoading(true); // Sadece boşsa yükleniyor çıkar
+
     try {
       const useAutoLocationStr = await AsyncStorage.getItem('useAutoLocation');
       const userCity = await AsyncStorage.getItem('userCity');
       const useAutoLocation = useAutoLocationStr !== null ? JSON.parse(useAutoLocationStr) : true;
 
-      let lat = 41.0082, lon = 28.9784; 
+      const date = new Date();
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const nextMonth = month === 12 ? 1 : month + 1;
+      const nextYear = month === 12 ? year + 1 : year;
+
+      // 🔥 1. CACHE KONTROLÜ (Bu ayın verisi zaten var mı?)
+      const cacheKey = `imsakiye_cache_${year}_${month}`;
+      const cachedStr = await AsyncStorage.getItem(cacheKey);
+
+      if (cachedStr) {
+        const cached = JSON.parse(cachedStr);
+        // Eğer konum ayarı dünküyle aynıysa direkt ekrana bas, bekleme yapma!
+        if (cached.settingAuto === useAutoLocation && cached.settingCity === userCity) {
+            processAndSetData(cached.rawList, cached.location);
+            return;
+        }
+      }
+
+      // 🔥 2. CACHE YOKSA VEYA KONUM DEĞİŞTİYSE İNTERNETTEN ÇEK
+      let lat = 41.0082, lon = 28.9784, displayName = "İstanbul"; 
 
       if (!useAutoLocation && userCity) {
-         setCity(userCity);
+         displayName = userCity;
          let geocodeResult = await Location.geocodeAsync(userCity);
          if (geocodeResult.length > 0) {
              lat = geocodeResult[0].latitude;
@@ -90,24 +113,41 @@ export default function ImsakiyeScreen() {
             lon = location.coords.longitude;
             let reverseGeocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
             if (reverseGeocode.length > 0) {
-              setCity(reverseGeocode[0].city || reverseGeocode[0].region || "Konum");
+              displayName = reverseGeocode[0].city || reverseGeocode[0].region || "Konum";
             }
-         } else { setCity("İstanbul"); }
+         }
       }
 
-      const date = new Date();
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1;
-      const nextMonth = month === 12 ? 1 : month + 1;
-      const nextYear = month === 12 ? year + 1 : year;
-
+      // API'ye gidiyoruz (Sadece 1 kez yapacak)
       const [res1, res2] = await Promise.all([
         axios.get(`${CALENDAR_API_URL}/${year}/${month}`, { params: { latitude: lat, longitude: lon, method: 13 } }),
         axios.get(`${CALENDAR_API_URL}/${nextYear}/${nextMonth}`, { params: { latitude: lat, longitude: lon, method: 13 } })
       ]);
 
       const rawList = [...res1.data.data, ...res2.data.data];
-      
+
+      // Veriyi Telefonun Hafızasına (Cache) Kaydet (Bir dahaki sefere anında açılsın)
+      const cacheData = {
+          rawList: rawList,
+          location: displayName,
+          settingAuto: useAutoLocation,
+          settingCity: userCity
+      };
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+
+      // Veriyi Ekrana Çizdir
+      processAndSetData(rawList, displayName);
+
+    } catch (error) {
+      console.error("Imsakiye API Hatası:", error);
+      setLoading(false);
+      setNextVakitName("Bağlantı Hatası");
+      setCountdown("--:--:--");
+    }
+  };
+
+  // Veriyi İşleme ve Ekrana Basma Fonksiyonu
+  const processAndSetData = (rawList, displayName) => {
       let processedList = [];
       let lastMonthTitle = "";
 
@@ -126,8 +166,8 @@ export default function ImsakiyeScreen() {
 
       const finalList = [{ type: 'table_header' }, ...processedList];
       setImsakiyeData(finalList);
+      setCity(displayName);
       
-      // 🔥 BUGÜNÜ BULMA (Garanti Yöntem)
       const d = new Date();
       const todayStr = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
       
@@ -146,17 +186,10 @@ export default function ImsakiyeScreen() {
         if (flatListRef.current && foundIndex !== -1) {
           flatListRef.current.scrollToIndex({ index: foundIndex, animated: true, viewPosition: 0.15 });
         }
-      }, 500);
-
-    } catch (error) {
-      console.error("Imsakiye API Hatası:", error);
-      setLoading(false);
-      setNextVakitName("Bağlantı Hatası");
-      setCountdown("--:--:--");
-    }
+      }, 300);
   };
 
-  // 🔥 GERİ SAYIM (Sorunsuz Matematiksel Yöntem)
+
   const calculateCountdown = () => {
     if (currentDayIndex === -1 || !imsakiyeData[currentDayIndex]) return;
     
@@ -166,14 +199,13 @@ export default function ImsakiyeScreen() {
     const timings = todayData.timings;
     const now = new Date();
     
-    // Güvenli Tarih Ayrıştırma
-    const dateParts = todayData.date.gregorian.date.split('-'); // Format: DD-MM-YYYY
+    const dateParts = todayData.date.gregorian.date.split('-'); 
     const year = parseInt(dateParts[2], 10);
-    const month = parseInt(dateParts[1], 10) - 1; // JS'de aylar 0'dan başlar
+    const month = parseInt(dateParts[1], 10) - 1; 
     const day = parseInt(dateParts[0], 10);
 
     const parseTime = (timeStr) => {
-      const [timeMatch] = timeStr.split(' '); // Saat kısmını al ("05:30 (EEST)" -> "05:30")
+      const [timeMatch] = timeStr.split(' '); 
       const [h, m] = timeMatch.split(':').map(num => parseInt(num, 10));
       return new Date(year, month, day, h, m, 0);
     };
@@ -190,7 +222,6 @@ export default function ImsakiyeScreen() {
       targetTime = aksamTime; 
       label = "İftara Kalan";
     } else {
-      // Yarına (Sonraki güne) geçiş
       let nextIndex = currentDayIndex + 1;
       while (nextIndex < imsakiyeData.length && (!imsakiyeData[nextIndex] || !imsakiyeData[nextIndex].timings)) {
           nextIndex++;
@@ -207,7 +238,6 @@ export default function ImsakiyeScreen() {
          const [nH, nM] = nextTimeMatch.split(':').map(num => parseInt(num, 10));
          targetTime = new Date(nYear, nMonth, nDay, nH, nM, 0);
       } else {
-         // Veri bittiyse (ayın sonu) varsayılan olarak +1 gün ekle
          targetTime = new Date(imsakTime.getTime() + 24 * 60 * 60 * 1000); 
       }
       label = "Yarın Sahura";
@@ -223,7 +253,6 @@ export default function ImsakiyeScreen() {
     const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const s = Math.floor((diff % (1000 * 60)) / 1000);
     
-    // Saatleri 05:08:09 formatında göstermek için padStart
     const formattedH = String(h).padStart(2, '0');
     const formattedM = String(m).padStart(2, '0');
     const formattedS = String(s).padStart(2, '0');
@@ -281,7 +310,6 @@ export default function ImsakiyeScreen() {
     const isToday = index === currentDayIndex;
     const isKadirGecesi = item.date.hijri.month.number === 9 && item.date.hijri.day === '27';
     
-    // Gün ve Ay İsimleri
     const engDayName = item.date.gregorian.weekday.en;
     const engMonthName = item.date.gregorian.month.en;
     const trDayName = TR_GUNLER[engDayName] || engDayName;
@@ -379,7 +407,7 @@ const styles = StyleSheet.create({
 
   timerMain: { alignItems: 'center', justifyContent: 'center', flex: 1, zIndex: 2, paddingBottom: 10 },
   timerLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 5 },
-  timerValue: { color: '#FFF', fontSize: 42, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.1)', textShadowOffset: {width:0, height:2}, textShadowRadius: 4, fontVariant: ['tabular-nums'] }, // tabular-nums eklendi (saat atlamaması için)
+  timerValue: { color: '#FFF', fontSize: 42, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.1)', textShadowOffset: {width:0, height:2}, textShadowRadius: 4, fontVariant: ['tabular-nums'] }, 
   
   bgIcon: { position: 'absolute', right: -20, bottom: -20, opacity: 0.1 },
 

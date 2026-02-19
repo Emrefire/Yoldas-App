@@ -1,10 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// Native Functions importunu kullanıyoruz (App Check uyumlu olsun diye)
 import functions from '@react-native-firebase/functions';
 
-// Android için bildirimlerin nasıl görüneceği ayarı
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -14,7 +12,6 @@ Notifications.setNotificationHandler({
 });
 
 export async function registerForPushNotificationsAsync() {
-  // İzinleri kontrol et
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
   
@@ -31,31 +28,22 @@ export async function registerForPushNotificationsAsync() {
 
 export async function scheduleAllPrayerNotifications(vakitler) {
   try {
-    // Önce eski planlanmışları temizle
     await Notifications.cancelAllScheduledNotificationsAsync();
     console.log("🧹 [Sistem] Eski bildirimler temizlendi.");
 
-    // 1. AYARLARI ÇEK
     const notifyOnTimeStr = await AsyncStorage.getItem('notifyOnTime');
     const notifyOnTime = notifyOnTimeStr !== null ? JSON.parse(notifyOnTimeStr) : true;
     
     const notifyPreAlertsStr = await AsyncStorage.getItem('notifyPreAlerts'); 
     const notifyPreAlerts = notifyPreAlertsStr !== null ? JSON.parse(notifyPreAlertsStr) : true;
 
-    // 🔥 SES SEÇİMİNİ AL
     const selectedSound = await AsyncStorage.getItem('userNotificationSound') || 'default';
-    
-    // iOS İçin Dosya Adı:
     const soundFile = selectedSound === 'default' ? 'default' : `${selectedSound}.wav`;
-    
-    // 🔥 ANDROID İÇİN KANAL ID'Sİ (App.js'de kurduğumuz kanallarla eşleşmeli)
-    // Eğer 'default' ise 'default' kanalını, 'ney' ise 'ney' kanalını kullanacak.
     const androidChannelId = selectedSound; 
 
     if (!notifyOnTime) return;
 
     const now = new Date();
-    const nowTime = now.getTime();
     const SAFETY_BUFFER = 2 * 60 * 1000; 
 
     const prayerConfig = [
@@ -86,25 +74,38 @@ export async function scheduleAllPrayerNotifications(vakitler) {
       let timeStr = vakitler[p.key]; 
       if (!timeStr) continue;
 
-      const [hour, minute] = timeStr.replace(/[^0-9:]/g, '').split(':').map(Number);
+      // Saati API'den temiz bir şekilde çekiyoruz
+      const [hourStr, minuteStr] = timeStr.split(' ')[0].split(':');
+      const hour = parseInt(hourStr, 10);
+      const minute = parseInt(minuteStr, 10);
+
       let targetDate = new Date();
       targetDate.setHours(hour, minute, 0, 0);
 
-      if (p.offset !== 0) targetDate.setMinutes(targetDate.getMinutes() + p.offset);
-      if (targetDate.getTime() <= (nowTime + SAFETY_BUFFER)) targetDate.setDate(targetDate.getDate() + 1);
+      // Saniye veya dakika kaymasını önlemek için direkt tarihi manipüle ediyoruz
+      if (p.offset !== 0) {
+        targetDate.setMinutes(targetDate.getMinutes() + p.offset);
+      }
 
-      const diffInSeconds = Math.floor((targetDate.getTime() - nowTime) / 1000);
+      // Eğer hesaplanan vakit geçmişteyse, yarına kur
+      if (targetDate.getTime() <= (now.getTime() + SAFETY_BUFFER)) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
 
-      if (diffInSeconds > 120) {
+      // Vakte 2 dakikadan fazla varsa kur (Hemen şimdi çalmasını engellemek için)
+      if (targetDate.getTime() > now.getTime() + 120000) {
         let finalMsg = p.msg;
 
-        // 45 dk kala AI mesajı (Native Functions ile)
+        // 🔥 YAPAY ZEKA KONTROLÜ VE ZAMAN AŞIMI (TIMEOUT)
         if (p.offset === -45 && (p.type === 'Sahur' || p.type === 'İftar')) {
           try {
             const askYoldas = functions().httpsCallable('askYoldas');
-            const result = await askYoldas({ 
-              prompt: `${p.type} vaktine 45 dakika kaldı. Bana çok kısa, samimi ve manevi bir hatırlatma yaz. (Tek cümle)` 
-            });
+            
+            // AI için maksimum 5 saniye bekleriz. Gelmezse sistemi tıkamaz, devam eder.
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 5000));
+            const aiPromise = askYoldas({ prompt: `${p.type} vaktine 45 dakika kaldı. Bana çok kısa, samimi ve manevi bir hatırlatma yaz. (Tek cümle)` });
+            
+            const result = await Promise.race([aiPromise, timeoutPromise]);
             finalMsg = result.data.answer;
           } catch (e) {
             finalMsg = p.type === 'Sahur' ? "Bereket vakti yaklaşıyor can kardeşim." : "İftar sevinci yaklaşıyor aziz dostum.";
@@ -114,44 +115,38 @@ export async function scheduleAllPrayerNotifications(vakitler) {
         }
 
         const uniqueId = `${p.key}_${p.offset}_${targetDate.getDate()}`;
-        
-        // AI gecikmesi ihtimaline karşı minik buffer
-        await new Promise(resolve => setTimeout(resolve, 200)); 
 
+        // 🔥 KRİTİK DEĞİŞİKLİK: Saniye hesabı (TIME_INTERVAL) yerine TAM TARİH (DATE) kullanıyoruz
         await Notifications.scheduleNotificationAsync({
           identifier: uniqueId,
           content: {
             title: p.title,
             body: finalMsg,
-            sound: soundFile, // iOS için dosya adı
+            sound: soundFile, 
             color: '#2D5A27',
-            // 🔥 KRİTİK DÜZELTME: Kanal ID'si dinamik seçiliyor
             android: {
                 channelId: androidChannelId, 
                 priority: 'max',
-                sound: true // Kanalın sesini kullan
+                sound: true 
             },
           },
           trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-            seconds: diffInSeconds,
-            channelId: androidChannelId, // Android 8.0+ için trigger'da da kanal belirtmek iyidir
-            repeats: false,
+            // "Şu andan X saniye sonra" DEĞİL, "Tam olarak şu saatte/tarihte" demek. Asla şaşmaz.
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: targetDate, 
+            channelId: androidChannelId, 
           },
         });
         
         scheduledCount++;
       }
     }
-    console.log(`✅ İşlem tamam. Toplam ${scheduledCount} bildirim kuruldu. Ses: ${androidChannelId}`);
+    console.log(`✅ İşlem tamam. Toplam ${scheduledCount} bildirim tam vaktine kuruldu. Seçilen Ses: ${androidChannelId}`);
   } catch (error) {
     console.log("❌ Planlama hatası:", error);
   }
 }
 
-// Bu fonksiyonu başka yerden çağırıyorsan buraya ekle, yoksa silebilirsin
 export async function scheduleRamadanAlerts(vakitler) {
-    // Yukarıdaki fonksiyon zaten hepsini kapsıyor (offset -45 olanlar)
-    // O yüzden burası boş kalabilir veya özel bir mantık varsa eklenir.
     console.log("Ramazan alarmları ana fonksiyona dahil edildi.");
 }

@@ -9,7 +9,6 @@ import { useTheme } from '../context/ThemeContext';
 import { fetchLibraryData } from '../services/apiService';
 import * as Haptics from 'expo-haptics';
 import axios from 'axios'; 
-// 🔥 50 Dualık Listeyi ve Diğer Verileri Çekiyoruz
 import { GUNLUK_DUALAR } from '../database/libraryData'; 
 
 const SEARCH_TABS = [
@@ -39,17 +38,12 @@ export default function LibraryDetailScreen({ route }) {
   const loadContent = async () => {
     setLoading(true);
     
-    // 🔥 EĞER "DUA" KATEGORİSİYSE ÖZEL İŞLEM YAP (Shuffle)
     if (categoryTitle.toLowerCase().includes('dua') || categoryId === 'gunluk-dualar') {
-        // 1. Tüm listeyi karıştır
         const shuffled = [...GUNLUK_DUALAR].sort(() => 0.5 - Math.random());
-        // 2. İlk 10 tanesini al
         const selected = shuffled.slice(0, 10);
-        
         setData(selected);
         setFilteredData(selected);
     } else {
-        // Diğer kategoriler için normal API/DB çağrısı
         const result = await fetchLibraryData(categoryId);
         if (result) {
           setData(result);
@@ -59,7 +53,6 @@ export default function LibraryDetailScreen({ route }) {
     setLoading(false);
   };
 
-  // Yenileme Butonu (Sadece Dualar İçin)
   const refreshDuas = () => {
     if (categoryTitle.toLowerCase().includes('dua') || categoryId === 'gunluk-dualar') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -92,6 +85,7 @@ export default function LibraryDetailScreen({ route }) {
     setSearchQuery('');
   };
 
+  // 🔥 ÇÖZÜLEN KISIM BURASI: TAM SEÇİLEN SAYFA/CÜZE GİDER
   const handleQuickGo = async (number) => {
       setNavigating(true);
       try {
@@ -105,14 +99,14 @@ export default function LibraryDetailScreen({ route }) {
               const firstAyah = res.data.data.ayahs[0];
               targetSurahId = firstAyah.surah.number;
               targetSurahName = firstAyah.surah.englishName;
-              targetPage = firstAyah.page; 
+              targetPage = number; // 🔥 Direk tıklanılan sayfa numarasını zorla gönderiyoruz
               targetAyah = firstAyah.numberInSurah;
           } else if (activeTab === 'cuz') {
               const res = await axios.get(`${KURAN_API_URL}/juz/${number}/quran-uthmani?limit=1`);
               const firstAyah = res.data.data.ayahs[0];
               targetSurahId = firstAyah.surah.number;
               targetSurahName = firstAyah.surah.englishName;
-              targetPage = firstAyah.page; 
+              targetPage = firstAyah.page; // Cüzlerin başlangıç sayfası API'den gelir, o doğrudur.
               targetAyah = firstAyah.numberInSurah;
           }
 
@@ -121,7 +115,7 @@ export default function LibraryDetailScreen({ route }) {
               navigation.navigate('SurahDetail', { 
                   surahId: targetSurahId, 
                   surahName: localSurah ? localSurah.title : targetSurahName,
-                  initialPage: targetPage,
+                  initialPage: targetPage, 
                   initialAyah: targetAyah
               });
           }
@@ -201,7 +195,6 @@ export default function LibraryDetailScreen({ route }) {
         {item.detail}
       </Text>
 
-      {/* Kaynak veya Anlam Kısmı */}
       {(item.meaning || item.source) && (
         <View style={[styles.meaningContainer, { backgroundColor: theme.background }]}>
           <Text style={[styles.cardMeaning, { color: theme.subText }]}>{item.meaning || item.source}</Text>
@@ -223,7 +216,6 @@ export default function LibraryDetailScreen({ route }) {
         <TouchableOpacity onPress={() => navigation.goBack()}><ChevronLeft size={28} color={theme.text} /></TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.text }]}>{categoryTitle}</Text>
         
-        {/* Dua Kategorisindeyse Yenileme Butonu Göster */}
         {(categoryTitle.toLowerCase().includes('dua') || categoryId === 'gunluk-dualar') ? (
             <TouchableOpacity onPress={refreshDuas}>
                 <RefreshCw size={24} color={theme.primary} />
@@ -306,7 +298,7 @@ export default function LibraryDetailScreen({ route }) {
                 <View style={styles.aiBoxCenter}>
                     <Text style={[styles.aiTitle, { color: theme.text }]}>İlim ve Hikmet Sohbeti</Text>
                     <Text style={[styles.aiQuestion, { color: theme.subText }]} numberOfLines={1}>
-                        "{type === 'quran' ? "Kur'an'ın kalplere şifasını sor..." : "Bu duaların faziletini sor..."}"
+                        {type === 'quran' ? "Kur'an'ın kalplere şifasını sor..." : "Bu duaların faziletini sor..."}
                     </Text>
                 </View>
                 <View style={styles.aiBoxRight}>

@@ -8,7 +8,7 @@ import { Send, ArrowLeft, Sparkles, Mic } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; // 🔥 EKLENDİ (Edge-to-edge için)
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; 
 
 import functions from '@react-native-firebase/functions';
 
@@ -18,20 +18,17 @@ const WELCOME_MESSAGES = [
   "Selamün Aleyküm cancağızım! 👋\n\nBen Yoldaş. Manevi konularda hasbihal etmek, dertleşmek veya bilgi almak istersen buradayım. 🌿",
 ];
 
-// 🔥 YENİ: Markdown Yıldızlarını (**) Kalın Metne Çeviren Fonksiyon
 const renderFormattedText = (text, theme, isUser) => {
   if (isUser) {
     return <Text style={[styles.messageText, { color: '#FFF' }]}>{text}</Text>;
   }
 
-  // Metni ** işaretlerine göre böler
   const parts = text.split(/(\*\*.*?\*\*)/g);
   
   return (
     <Text style={[styles.messageText, { color: theme.text }]}>
       {parts.map((part, index) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          // Yıldızları temizle ve kalın (bold) yap
           return (
             <Text key={index} style={{ fontWeight: 'bold', fontSize: 17 }}>
               {part.substring(2, part.length - 2)}
@@ -60,7 +57,6 @@ const TypewriterMessage = ({ text, theme, onComplete }) => {
     }
   }, [currentIndex, text]);
 
-  // Daktilo efekti bitene kadar normal, bitince kalınlaştırmalı (renderFormattedText) gösteririz
   return renderFormattedText(displayedText, theme, false);
 };
 
@@ -93,7 +89,7 @@ function ChatContent() {
   const navigation = useNavigation();
   const route = useRoute();
   const { theme, isDarkMode } = useTheme();
-  const insets = useSafeAreaInsets(); // 🔥 EKLENDİ
+  const insets = useSafeAreaInsets(); 
   
   const [messages, setMessages] = useState([{ id: '1', text: WELCOME_MESSAGES[0], sender: 'bot', animate: false }]);
   const [inputText, setInputText] = useState('');
@@ -188,7 +184,6 @@ function ChatContent() {
           {!isUser && item.animate ? (
             <TypewriterMessage text={item.text} theme={theme} onComplete={() => setInputLocked(false)} />
           ) : (
-            // 🔥 YENİ: Kalın yazıları işleyen fonksiyonu burada çağırıyoruz
             renderFormattedText(item.text, theme, isUser)
           )}
         </View>
@@ -198,6 +193,8 @@ function ChatContent() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 0 }]}>
+      
+      {/* HEADER */}
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <View style={{flexDirection: 'row', alignItems: 'center'}}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}><ArrowLeft size={24} color={theme.text} /></TouchableOpacity>
@@ -210,18 +207,21 @@ function ChatContent() {
         <Sparkles size={22} color={theme.primary} fill={theme.primary + '20'} />
       </View>
 
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}        
-        ListFooterComponent={loading && <View style={styles.messageRow}><Image source={YOLDAS_AVATAR} style={styles.avatar} /><TypingIndicator theme={theme} /></View>}
-      />
+      {/* 🔥 KLAVYE ÇÖZÜMÜ: Tüm liste ve input bir KeyboardAvoidingView içine alındı ve flex:1 verildi */}
+      <KeyboardAvoidingView 
+         style={{ flex: 1 }} 
+         behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listContent}        
+          ListFooterComponent={loading && <View style={styles.messageRow}><Image source={YOLDAS_AVATAR} style={styles.avatar} /><TypingIndicator theme={theme} /></View>}
+        />
 
-      {/* 🔥 EKLENDİ: paddingBottom değerine insets.bottom ekledik ki tuşların altında kalmasın */}
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}>
-        <View style={[styles.inputArea, { paddingBottom: (Platform.OS === 'ios' ? 25 : 15) + insets.bottom }]}>
+        <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 15) }]}>
           <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <TouchableOpacity onPress={startListening} style={styles.actionBtn}>
                 <Mic size={22} color={theme.primary} />
@@ -256,24 +256,27 @@ export default function ChatScreen(props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, elevation: 3 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, elevation: 3, zIndex: 10 },
   backBtn: { marginRight: 12 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold' },
   onlineRow: { flexDirection: 'row', alignItems: 'center' },
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50', marginRight: 5 },
   onlineText: { fontSize: 12, fontWeight: '600' },
-  listContent: { padding: 16, paddingBottom: 30 },
+  
+  listContent: { padding: 16, paddingBottom: 10 }, // Alt boşluğu azalttım ki klavye açılınca zıplamasın
   messageRow: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
   avatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
   bubble: { padding: 14, borderRadius: 20, maxWidth: '80%', elevation: 1, shadowOpacity: 0.05 },
   userBubble: { borderBottomRightRadius: 4 },
   botBubble: { borderBottomLeftRadius: 4 },
   messageText: { fontSize: 16, lineHeight: 24 },
+  
   typingBubble: { padding: 12, borderRadius: 18, borderBottomLeftRadius: 4 },
   typingRow: { flexDirection: 'row', alignItems: 'center', height: 10 },
   dot: { width: 6, height: 6, borderRadius: 3, marginHorizontal: 2 },
-  inputArea: { padding: 12 }, // Padding bottom'ı dinamik olarak yukarıda ayarladık
+  
+  inputArea: { paddingHorizontal: 12, paddingTop: 5, backgroundColor: 'transparent' }, 
   inputContainer: { flexDirection: 'row', alignItems: 'center', borderRadius: 30, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
   actionBtn: { padding: 10 },
   input: { flex: 1, maxHeight: 100, paddingVertical: 8, fontSize: 16 },

@@ -15,7 +15,10 @@
         "EXPO_PUBLIC_EZAN_API_URL": "https://api.aladhan.com/v1",
         "EXPO_PUBLIC_KURAN_API_URL": "https://api.alquran.cloud/v1",
         "EXPO_PUBLIC_OVERPASS_MAIN": "https://overpass-api.de/api/interpreter",
-        "EXPO_PUBLIC_OVERPASS_BACKUP": "https://overpass.kumi.systems/api/interpreter"
+        "EXPO_PUBLIC_OVERPASS_BACKUP": "https://overpass.kumi.systems/api/interpreter",
+        "EXPO_PUBLIC_POLICY_URL": "https://docs.google.com/document/d/15LeLTMcl9zLOd8_8VgBS2T5g3EU--zae488bvZQEOAo/edit?usp=sharing",
+        "EXPO_PUBLIC_CALENDAR_API_URL": "https://api.aladhan.com/v1/calendar"
+
       }
     },
     "production": {
@@ -23,7 +26,10 @@
         "EXPO_PUBLIC_EZAN_API_URL": "https://api.aladhan.com/v1",
         "EXPO_PUBLIC_KURAN_API_URL": "https://api.alquran.cloud/v1",
         "EXPO_PUBLIC_OVERPASS_MAIN": "https://overpass-api.de/api/interpreter",
-        "EXPO_PUBLIC_OVERPASS_BACKUP": "https://overpass.kumi.systems/api/interpreter"
+        "EXPO_PUBLIC_OVERPASS_BACKUP": "https://overpass.kumi.systems/api/interpreter",
+        "EXPO_PUBLIC_POLICY_URL": "https://docs.google.com/document/d/15LeLTMcl9zLOd8_8VgBS2T5g3EU--zae488bvZQEOAo/edit?usp=sharing",
+        "EXPO_PUBLIC_CALENDAR_API_URL": "https://api.aladhan.com/v1/calendar"
+
       }
     }
   },

@@ -5,9 +5,9 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
-import { Heart, Compass, Sparkles, Landmark, BookOpen, CheckCircle2, ArrowRight } from 'lucide-react-native';
+import { Heart, Compass, Sparkles, Landmark, BookOpen, CheckCircle2, ArrowRight, Award } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; // 🔥 EKLENDİ (Edge-to-edge için)
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; 
 
 const { width, height } = Dimensions.get('window');
 const IS_SMALL_SCREEN = height < 700;
@@ -36,13 +36,20 @@ const SLIDES = [
   },
   {
     id: '4',
+    title: 'Eğlenerek Öğren',
+    description: 'Yoldaş AI destekli bilgi yarışmasıyla İslami bilgini test et. Serini bozma, jokerlerini akıllıca kullan! 🏆',
+    icon: Award,
+    color: '#E91E63', 
+  },
+  {
+    id: '5',
     title: 'İstikrar ve Motivasyon',
     description: 'Günlük ibadet hedeflerini belirle, istikrar tablonu oluştur ve zinciri kırmadan devam et! 💪',
     icon: CheckCircle2,
     color: '#FF9500', 
   },
   {
-    id: '5',
+    id: '6',
     title: 'Pusulan ve Vaktin',
     description: 'Kıble yönünü bul, namaz ve imsakiye vakitlerini asla kaçırma. Tüm manevi araçların tek bir yerde.',
     icon: Compass,
@@ -52,7 +59,7 @@ const SLIDES = [
 
 export default function OnboardingScreen({ navigation }) {
   const { theme, isDarkMode } = useTheme();
-  const insets = useSafeAreaInsets(); // 🔥 EKLENDİ (Telefonun alt tuş boşluğunu hesaplar)
+  const insets = useSafeAreaInsets(); 
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef();
@@ -156,7 +163,6 @@ export default function OnboardingScreen({ navigation }) {
         scrollEventThrottle={16}
       />
       
-      {/* 🔥 EKLENDİ: insets.bottom ile buton yukarı itildi */}
       <View style={[styles.footer, { paddingBottom: (Platform.OS === 'ios' ? 40 : 25) + insets.bottom }]}>
         <View style={styles.indicatorRow}>
           {SLIDES.map((_, index) => {
@@ -222,7 +228,7 @@ const styles = StyleSheet.create({
   title: { fontWeight: '900', textAlign: 'center', marginBottom: 18, letterSpacing: -0.8 },
   description: { textAlign: 'center', lineHeight: 28, fontWeight: '500', opacity: 0.9 },
   
-  footer: { paddingHorizontal: 35, alignItems: 'center' }, // paddingBottom dinamik yapıldı
+  footer: { paddingHorizontal: 35, alignItems: 'center' },
   indicatorRow: { flexDirection: 'row', height: 10, justifyContent: 'center', marginBottom: 35 },
   dot: { height: 10, borderRadius: 5, marginHorizontal: 5 },
   

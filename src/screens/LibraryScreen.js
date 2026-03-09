@@ -1,14 +1,19 @@
 import React, { useState, useRef } from 'react';
 import { 
   StyleSheet, Text, View, FlatList, Pressable, 
-  SafeAreaView, TextInput, StatusBar, Animated, Easing, TouchableOpacity, Platform, Dimensions
+  SafeAreaView, TextInput, StatusBar, Animated, Easing, Platform, Dimensions
 } from 'react-native';
-import { Heart, BookOpen, Star, Feather, Search } from 'lucide-react-native'; // 🔥 Sparkles silindi
+import { Heart, BookOpen, Star, Feather, Search, Award } from 'lucide-react-native'; 
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext'; 
 import { libraryCategories } from '../database/libraryData';
 
-// Ekran boyutları
+// 🔥 REKLAM KÜTÜPHANESİ EKLENDİ
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+
+// 💡 Geliştirme aşamasında test reklamı, canlıya çıkarken kendi Banner ID'ni buraya yazacaksın.
+const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy'; 
+
 const { width } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = (width - 40 - CARD_GAP) / 2;
@@ -18,29 +23,39 @@ const iconMap = {
   heart: Heart,
   'book-open': BookOpen,
   star: Star,
-  feather: Feather
+  feather: Feather,
+  award: Award
 };
 
-// 🔥 ÖZEL KART: ECDADIN MİRASI
+// ÖZEL KART 1: ECDADIN MİRASI
 const HERITAGE_CARD = {
     id: 'heritage_special',
     title: 'Ecdadın Mirası',
     subtitle: 'Tarihimiz ve Camilerimiz 🕌',
     icon: 'feather', 
-    color: '#D4AF37', // Altın Sarısı
+    color: '#D4AF37', 
     type: 'special_redirect', 
     screen: 'Heritage'
+};
+
+// ÖZEL KART 2: BİLGİ YARIŞMASI
+const QUIZ_CARD = {
+    id: 'quiz_special',
+    title: 'Bilgi Yarışması',
+    subtitle: 'Dini Bilgini Test Et 🏆',
+    icon: 'award', 
+    color: '#FF6B6B', 
+    type: 'special_redirect', 
+    screen: 'Quiz' 
 };
 
 const LibraryCard = ({ item, theme, isDarkMode }) => {
   const navigation = useNavigation();
   const IconComponent = iconMap[item.icon] || BookOpen;
 
-  // Animasyon Değerleri
   const fillAnim = useRef(new Animated.Value(0)).current; 
   const scaleAnim = useRef(new Animated.Value(1)).current; 
   
-  // Baloncuk Animasyonları
   const bubble1 = useRef(new Animated.Value(0)).current;
   const bubble2 = useRef(new Animated.Value(0)).current;
   const bubble3 = useRef(new Animated.Value(0)).current;
@@ -193,7 +208,7 @@ export default function LibraryScreen() {
   const { theme, isDarkMode } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   
-  const allCategories = [HERITAGE_CARD, ...libraryCategories];
+  const allCategories = [HERITAGE_CARD, QUIZ_CARD, ...libraryCategories];
 
   const filteredCategories = allCategories.filter(cat => 
     cat.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -203,16 +218,13 @@ export default function LibraryScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 25) + 10 : 0 }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       
-      {/* HEADER */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Kütüphane</Text>
           <Text style={[styles.headerSubtitle, { color: theme.subText }]}>İlim ve Hikmet Kapısı 📚</Text>
         </View>
-        {/* 🔥 Chat butonu buradan kaldırıldı */}
       </View>
 
-      {/* SEARCH */}
       <View style={[styles.searchWrapper, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <Search size={20} color={theme.subText} style={{ marginLeft: 10 }} />
         <TextInput 
@@ -224,7 +236,6 @@ export default function LibraryScreen() {
         />
       </View>
 
-      {/* LIST */}
       <FlatList
         data={filteredCategories}
         renderItem={({ item }) => (
@@ -243,6 +254,17 @@ export default function LibraryScreen() {
           </View>
         }
       />
+
+      {/* 🔥 REKLAM ALANI BURADA */}
+      <View style={[styles.adContainer, { borderTopColor: theme.border, backgroundColor: theme.card }]}>
+        <BannerAd
+          unitId={adUnitId}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{
+            requestNonPersonalizedAdsOnly: true,
+          }}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -261,7 +283,7 @@ const styles = StyleSheet.create({
     height: 50, borderRadius: 16, borderWidth: 1
   },
   searchInput: { flex: 1, paddingHorizontal: 10, fontSize: 16, fontWeight: '500' },
-  listContent: { paddingHorizontal: 20, paddingBottom: 100 }, 
+  listContent: { paddingHorizontal: 20, paddingBottom: 20 }, // Reklam alanı eklendiği için paddingBottom düşürüldü
   columnWrapper: { justifyContent: 'space-between' },
   
   gridCard: {
@@ -298,5 +320,15 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 0, left: 0, right: 0, height: 4, opacity: 0.8, zIndex: 1
   },
   emptyContainer: { alignItems: 'center', marginTop: 50, paddingHorizontal: 40 },
-  emptyText: { textAlign: 'center', fontSize: 16, lineHeight: 24 }
+  emptyText: { textAlign: 'center', fontSize: 16, lineHeight: 24 },
+
+  // 🔥 REKLAM ALANI STİLİ
+  adContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 5,
+    borderTopWidth: 1,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 0 // iPhone'ların alt çentiği için pay
+  }
 });

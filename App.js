@@ -7,7 +7,7 @@ import { Home, BookOpen, Fingerprint, Settings, Heart } from 'lucide-react-nativ
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'; // 🔥 EKLENDİ
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Context & DB & Error Boundary
 import { ThemeProvider, useTheme } from './src/context/ThemeContext'; 
@@ -32,6 +32,8 @@ import MosqueScreen from './src/screens/MosqueScreen';
 import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen'; 
 import HeritageScreen from './src/screens/HeritageScreen';
 import ImsakiyeScreen from './src/screens/ImsakiyeScreen';
+// 🔥 BİLGİ YARIŞMASI EKLENDİ
+import QuizScreen from './src/screens/QuizScreen'; 
 
 export const navigationRef = createNavigationContainerRef();
 
@@ -75,10 +77,9 @@ function SettingsStack() {
   );
 }
 
-// 🔥 ALT MENÜ GÜVENLİ ALAN AYARI
 function MainTabs() {
   const { theme, isDarkMode } = useTheme();
-  const insets = useSafeAreaInsets(); // 🔥 EKLENDİ: Telefonun alt/üst boşluklarını hesaplar
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -94,7 +95,6 @@ function MainTabs() {
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: isDarkMode ? '#8E8E93' : '#A0A0A0',
         tabBarStyle: { 
-          // 🔥 EKLENDİ: insets.bottom ile telefonun alt tuşları kadar ekstra boşluk bırakılır
           height: (Platform.OS === 'ios' ? 90 : 70) + insets.bottom, 
           paddingBottom: (Platform.OS === 'ios' ? 30 : 10) + insets.bottom, 
           borderTopWidth: 0, 
@@ -128,6 +128,8 @@ function RootNavigator({ isFirstLaunch }) {
       <Stack.Screen name="Mosque" component={MosqueScreen} />
       <Stack.Screen name="Heritage" component={HeritageScreen} /> 
       <Stack.Screen name="Imsakiye" component={ImsakiyeScreen} /> 
+      {/* 🔥 BİLGİ YARIŞMASI ROTASI EKLENDİ */}
+      <Stack.Screen name="Quiz" component={QuizScreen} /> 
     </Stack.Navigator>
   );
 }
@@ -215,7 +217,6 @@ export default function App() {
 
   return (
     <GlobalErrorBoundary>
-      {/* 🔥 EKLENDİ: Tüm uygulamayı SafeAreaProvider ile sardık */}
       <SafeAreaProvider>
         <ThemeProvider>
           <View style={{ flex: 1 }} onLayout={onLayoutRootView}>

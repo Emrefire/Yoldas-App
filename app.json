@@ -28,56 +28,59 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
         "VIBRATE"
       ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-   "plugins": [
-  "@react-native-firebase/app",
-  "@react-native-firebase/app-check",
-  "expo-sqlite",
-  "expo-font",
-  [
-    "expo-location",
-    {
-      "locationAlwaysAndWhenInUsePermission": "Yoldaş, namaz vakitlerini ve kıble yönünü doğru hesaplamak için konumuna ihtiyaç duyar."
-    }
-  ],
-  [
-    "expo-notifications",
-    {
-      "icon": "./assets/icon.png",
-      "color": "#2D5A27",
-      "sounds": [
-        "./assets/sounds/ney.wav",
-        "./assets/sounds/kuscivilti.wav",
-        "./assets/sounds/ruzgarcan.wav",
-        "./assets/sounds/thunderbowl.wav",
-        "./assets/sounds/arabicsounds.wav"
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/app-check",
+      "expo-sqlite",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Yoldaş, namaz vakitlerini ve kıble yönünü doğru hesaplamak için konumuna ihtiyaç duyar."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#193f33",
+          "sounds": [
+            "./assets/sounds/ney.wav",
+            "./assets/sounds/kuscivilti.wav",
+            "./assets/sounds/ruzgarcan.wav",
+            "./assets/sounds/thunderbowl.wav",
+            "./assets/sounds/arabicsounds.wav"
+          ]
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "kotlinVersion": "2.0.21",
+            "usesCleartextTraffic": true,
+            "enableMultidex": true
+          }
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
       ]
-    }
-  ],
-  [
-    "expo-build-properties",
-    {
-      "android": {
-        "compileSdkVersion": 36,
-      "targetSdkVersion": 36,
-        "usesCleartextTraffic": true,
-        "enableMultidex": true
-      }
-    }
-  ]
-],
+    ],
     "extra": {
       "eas": {
-        "projectId": "6032cf52-b012-4ab0-b6e1-e794e940166b"
+        "projectId": "f657d3a5-f93f-432c-ab5f-57fe5c77ef8e"
       }
     }
   }

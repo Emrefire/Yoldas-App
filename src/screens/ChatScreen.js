@@ -4,7 +4,8 @@ import {
   TouchableOpacity, FlatList, KeyboardAvoidingView, 
   Platform, Keyboard, Animated, Image, StatusBar, Alert 
 } from 'react-native';
-import { Send, ArrowLeft, Sparkles, Mic } from 'lucide-react-native';
+// 🔥 DEĞİŞİKLİK: Square ikonunu ekledik
+import { Send, ArrowLeft, Sparkles, Mic, Square } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
@@ -98,10 +99,15 @@ function ChatContent() {
   
   const flatListRef = useRef();
   const inputRef = useRef(); 
+  
+  // 🔥 DEĞİŞİKLİK: İşlemi iptal etmek için bir referans tutuyoruz
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
-    if (route.params?.initialMessage) setTimeout(() => sendMessage(route.params.initialMessage), 600);
-  }, [route.params]);
+    if (route.params?.initialMessage) {
+      setInputText(route.params.initialMessage);
+    }
+  }, [route.params?.initialMessage]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -113,6 +119,25 @@ function ChatContent() {
   const startListening = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert("Yakında", "Sesli sohbet özelliği çok yakında gelecek! 🎙️");
+  };
+
+  // 🔥 DEĞİŞİKLİK: Durdurma butonu fonksiyonu
+  const stopAction = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    // 1. API'yi iptal et (eğer hala yükleniyorsa)
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    // 2. Kilidi ve yükleme ikonunu kaldır
+    setLoading(false);
+    setInputLocked(false);
+    
+    // 3. Eğer halihazırda daktilo gibi yazıyorsa, animasyonu kesip tam metni göster
+    setMessages(prev => prev.map(msg => 
+      msg.animate ? { ...msg, animate: false } : msg
+    ));
   };
 
   const sendMessage = async (text) => {
@@ -130,6 +155,10 @@ function ChatContent() {
     setLoading(true);
     setInputLocked(true);
     Keyboard.dismiss();
+
+    // 🔥 DEĞİŞİKLİK: Yeni bir iptal denetleyicisi oluşturuyoruz
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     try {
       const askYoldas = functions().httpsCallable('askYoldas');
@@ -150,9 +179,10 @@ function ChatContent() {
         Kullanıcı Sorusu: ${userText}
       `;
 
-      const result = await askYoldas({
-        prompt: securePrompt
-      });
+      const result = await askYoldas({ prompt: securePrompt });
+
+      // 🔥 DEĞİŞİKLİK: Kullanıcı durdur tuşuna bastıysa, gelen cevabı ekrana basma
+      if (abortController.signal.aborted) return;
 
       const botResponse = result.data.answer; 
 
@@ -164,6 +194,9 @@ function ChatContent() {
       }]);
 
     } catch (e) {
+      // 🔥 DEĞİŞİKLİK: Kullanıcı iptal etti diye hata verdiyse bunu ekrana yansıtma
+      if (abortController.signal.aborted) return;
+      
       console.error("Firebase Hatası:", e);
       setMessages(prev => [...prev, { 
         id: 'err', 
@@ -171,7 +204,10 @@ function ChatContent() {
         sender: 'bot' 
       }]);
     } finally {
-      setLoading(false);
+      // Sadece bu istek iptal edilmediyse kilidi aç (çünkü iptal edildiyse stopAction açtı zaten)
+      if (!abortController.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
@@ -207,7 +243,6 @@ function ChatContent() {
         <Sparkles size={22} color={theme.primary} fill={theme.primary + '20'} />
       </View>
 
-      {/* 🔥 KLAVYE ÇÖZÜMÜ: Tüm liste ve input bir KeyboardAvoidingView içine alındı ve flex:1 verildi */}
       <KeyboardAvoidingView 
          style={{ flex: 1 }} 
          behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -226,10 +261,11 @@ function ChatContent() {
             <TouchableOpacity onPress={startListening} style={styles.actionBtn}>
                 <Mic size={22} color={theme.primary} />
             </TouchableOpacity>
+            
             <TextInput
               ref={inputRef}
               style={[styles.input, { color: theme.text }]}
-              placeholder={inputLocked ? "Yoldaş yazıyor..." : "İçini dök derman arayalım..."}
+              placeholder={inputLocked ? "Yoldaş düşünüyor..." : "İçini dök derman arayalım..."}
               placeholderTextColor={theme.subText}
               value={inputText}
               onChangeText={setInputText}
@@ -237,9 +273,18 @@ function ChatContent() {
               maxLength={500} 
               editable={!inputLocked}
             />
-            <TouchableOpacity onPress={() => sendMessage()} disabled={!inputText.trim() || inputLocked} style={[styles.sendBtn, { backgroundColor: theme.primary }]}>
-              <Send size={20} color="#FFF" />
-            </TouchableOpacity>
+            
+            {/* 🔥 DEĞİŞİKLİK: Gönder ve Durdur Butonları Arası Geçiş */}
+            {inputLocked ? (
+              <TouchableOpacity onPress={stopAction} style={[styles.sendBtn, { backgroundColor: '#F44336' }]}>
+                <Square size={18} color="#FFF" fill="#FFF" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => sendMessage()} disabled={!inputText.trim()} style={[styles.sendBtn, { backgroundColor: theme.primary, opacity: !inputText.trim() ? 0.6 : 1 }]}>
+                <Send size={20} color="#FFF" />
+              </TouchableOpacity>
+            )}
+
           </View>
           <Text style={{textAlign: 'right', fontSize: 10, color: theme.subText, marginRight: 10, marginTop: 4}}>
              {inputText.length}/500
@@ -264,7 +309,7 @@ const styles = StyleSheet.create({
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50', marginRight: 5 },
   onlineText: { fontSize: 12, fontWeight: '600' },
   
-  listContent: { padding: 16, paddingBottom: 10 }, // Alt boşluğu azalttım ki klavye açılınca zıplamasın
+  listContent: { padding: 16, paddingBottom: 10 }, 
   messageRow: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
   avatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
   bubble: { padding: 14, borderRadius: 20, maxWidth: '80%', elevation: 1, shadowOpacity: 0.05 },

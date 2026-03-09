@@ -92,31 +92,31 @@ export default function LibraryDetailScreen({ route }) {
           let targetSurahId = null;
           let targetSurahName = "";
           let targetPage = null;
-          let targetAyah = null;
 
           if (activeTab === 'sayfa') {
-              const res = await axios.get(`${KURAN_API_URL}/page/${number}/quran-uthmani?limit=1`);
+              // API'deki limit=1 parametresi sayfa kaymalarına neden olabiliyor, kaldırıldı.
+              const res = await axios.get(`${KURAN_API_URL}/page/${number}/quran-uthmani`);
               const firstAyah = res.data.data.ayahs[0];
               targetSurahId = firstAyah.surah.number;
               targetSurahName = firstAyah.surah.englishName;
-              targetPage = number; // 🔥 Direk tıklanılan sayfa numarasını zorla gönderiyoruz
-              targetAyah = firstAyah.numberInSurah;
+              targetPage = number; // Direkt tıklanılan sayfa numarası
           } else if (activeTab === 'cuz') {
-              const res = await axios.get(`${KURAN_API_URL}/juz/${number}/quran-uthmani?limit=1`);
+              const res = await axios.get(`${KURAN_API_URL}/juz/${number}/quran-uthmani`);
               const firstAyah = res.data.data.ayahs[0];
               targetSurahId = firstAyah.surah.number;
               targetSurahName = firstAyah.surah.englishName;
-              targetPage = firstAyah.page; // Cüzlerin başlangıç sayfası API'den gelir, o doğrudur.
-              targetAyah = firstAyah.numberInSurah;
+              targetPage = firstAyah.page; // Cüzlerin başlangıç sayfası API'den gelir
           }
 
           if (targetSurahId) {
-              const localSurah = data.find(d => d.id === targetSurahId.toString());
+              const localSurah = data.find(d => d.id === targetSurahId.toString() || d.id === targetSurahId);
+              
+              // 🔥 initialAyah parametresi scroll sapmasına neden olduğu için kaldırıldı.
+              // Artık "Sure" listesinde olduğu gibi sadece initialPage gönderiyoruz.
               navigation.navigate('SurahDetail', { 
                   surahId: targetSurahId, 
                   surahName: localSurah ? localSurah.title : targetSurahName,
-                  initialPage: targetPage, 
-                  initialAyah: targetAyah
+                  initialPage: targetPage 
               });
           }
       } catch (error) {

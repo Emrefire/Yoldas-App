@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore'; // Değişen kısım
 
-// 🔥 BİLGİLER GÜVENLİ BİR ŞEKİLDE .ENV DOSYASINDAN ÇEKİLİYOR
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -15,5 +14,7 @@ const firebaseConfig = {
 // Firebase'i başlat
 const app = initializeApp(firebaseConfig);
 
-// Veritabanını dışarı aktar
-export const db = getFirestore(app);
+// 🔥 Kritik Değişiklik: Ağ isteklerini uzun yoklama (polling) ile zorla
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});

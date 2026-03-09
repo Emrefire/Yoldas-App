@@ -21,6 +21,9 @@ import { registerForPushNotificationsAsync, scheduleAllPrayerNotifications, sche
 import { useTheme } from '../context/ThemeContext';
 import { SURE_ISIMLERI, ESMA_TR_LIST, GUNLUK_HADISLER } from '../database/libraryData'; 
 
+// 🔥 REKLAM KÜTÜPHANESİ EKLENDİ
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+
 const { width } = Dimensions.get('window');
 
 const EZAN_API_URL = process.env.EXPO_PUBLIC_EZAN_API_URL;
@@ -40,7 +43,8 @@ export default function HomeScreen() {
   const [tasks, setTasks] = useState([]);
   const [vakitler, setVakitler] = useState(null);
   const [hijriMonth, setHijriMonth] = useState(null);
-  
+  const [isPremium, setIsPremium] = useState(false); // 🔥 Premium Kontrolü
+
   const lastVakitlerRef = useRef(null); 
   const lastScheduleTimeRef = useRef(0);
   
@@ -90,6 +94,20 @@ export default function HomeScreen() {
   const ayetRef = useRef();
   const hadisRef = useRef();
   const esmaRef = useRef();
+
+  // 🔥 YENİ: REKLAM ALANI BİLEŞENİ
+  const renderBannerAd = () => {
+    if (isPremium) return null; // Premium kullanıcı ise boş döndür
+    return (
+      <View style={styles.adContainer}>
+        <BannerAd
+          unitId={__DEV__ ? TestIds.BANNER : 'GERÇEK_ADMOB_BANNER_ID_BURAYA'}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+        />
+      </View>
+    );
+  };
 
   useEffect(() => {
     const checkTooltip = async () => {
@@ -176,22 +194,16 @@ export default function HomeScreen() {
 
   const getLocationAndVakitler = async () => {
     if (!vakitler) setLoading(true);
-
     try {
         const useAutoLocationStr = await AsyncStorage.getItem('useAutoLocation');
         const userCity = await AsyncStorage.getItem('userCity');
         const useAutoLocation = useAutoLocationStr !== null ? JSON.parse(useAutoLocationStr) : true;
-
         const todayStr = new Date().toDateString();
         const cachedStr = await AsyncStorage.getItem('cached_vakitler');
         
         if (cachedStr) {
             const cached = JSON.parse(cachedStr);
-            if (
-                cached.date === todayStr && 
-                cached.settingAuto === useAutoLocation && 
-                cached.settingCity === userCity
-            ) {
+            if (cached.date === todayStr && cached.settingAuto === useAutoLocation && cached.settingCity === userCity) {
                 setVakitler(cached.timings);
                 setHijriMonth(cached.hijri);
                 setLocationName(cached.location);
@@ -199,11 +211,8 @@ export default function HomeScreen() {
                 return; 
             }
         }
-
         setLoading(true); 
-        
         let queryLat, queryLon, displayName;
-
         if (!useAutoLocation && userCity) {
             displayName = userCity;
             let geocodeResult = await Location.geocodeAsync(userCity);
@@ -228,29 +237,15 @@ export default function HomeScreen() {
                 else displayName = "Mevcut Konum";
             }
         }
-        
-        const response = await axios.get(`${EZAN_API_URL}/timings`, { 
-            params: { latitude: queryLat, longitude: queryLon, method: 13 } 
-        });
-
+        const response = await axios.get(`${EZAN_API_URL}/timings`, { params: { latitude: queryLat, longitude: queryLon, method: 13 } });
         const fetchedTimings = response.data.data.timings;
         const fetchedHijri = response.data.data.date.hijri.month.number;
-        
         setLocationName(displayName);
         setVakitler(fetchedTimings);
         setHijriMonth(fetchedHijri);
         setLoading(false);
-
-        const cacheData = {
-            timings: fetchedTimings,
-            hijri: fetchedHijri,
-            location: displayName,
-            date: todayStr,
-            settingAuto: useAutoLocation,
-            settingCity: userCity
-        };
+        const cacheData = { timings: fetchedTimings, hijri: fetchedHijri, location: displayName, date: todayStr, settingAuto: useAutoLocation, settingCity: userCity };
         await AsyncStorage.setItem('cached_vakitler', JSON.stringify(cacheData));
-
     } catch (error) {
         try {
             const cachedStr = await AsyncStorage.getItem('cached_vakitler');
@@ -262,10 +257,7 @@ export default function HomeScreen() {
                 setLoading(false);
                 return; 
             }
-        } catch (cacheError) {
-            console.log("Cache okuma hatası:", cacheError);
-        }
-
+        } catch (cacheError) { console.log("Cache okuma hatası:", cacheError); }
         setLoading(false);
         setLocationName("Bağlantı Yok");
     }
@@ -273,6 +265,11 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      const checkPremium = async () => {
+        const premiumStatus = await AsyncStorage.getItem('isPremiumUser');
+        setIsPremium(premiumStatus === 'true');
+      };
+      checkPremium();
       refreshTasks();
       updateStreakData();
       getLocationAndVakitler();
@@ -289,7 +286,6 @@ export default function HomeScreen() {
         if (now - lastScheduleTimeRef.current < 2000) return;
         const currentHour = new Date().getHours();
         const uniqueKey = `v_final_v18_${currentHour}_${vakitler.Fajr}_${locationName}`;
-        
         if (lastVakitlerRef.current !== uniqueKey) {
           await scheduleAllPrayerNotifications(vakitler); 
           await scheduleRamadanAlerts(vakitler); 
@@ -313,7 +309,6 @@ export default function HomeScreen() {
         { name: 'Akşam', time: vakitler.Maghrib },
         { name: 'Yatsı', time: vakitler.Isha }
       ];
-      
       const mappedTimes = times.map(v => {
         const [h, m] = v.time.split(':').map(Number);
         const d = new Date();
@@ -323,7 +318,6 @@ export default function HomeScreen() {
       mappedTimes.sort((a,b) => a.date - b.date);
       let nextIndex = mappedTimes.findIndex(v => v.date > now);
       let next, prev;
-
       if (nextIndex === -1) {
         next = { ...mappedTimes[0], date: new Date(mappedTimes[0].date.getTime() + 86400000) };
         prev = mappedTimes[mappedTimes.length - 1]; 
@@ -342,12 +336,10 @@ export default function HomeScreen() {
       const m = Math.floor((diffSec % 3600) / 60);
       const s = diffSec % 60;
       setTimeLeft(`${h > 0 ? h + 'sa ' : ''}${m}dk ${s}sn`);
-      
       const totalDuration = next.date - prev.date;
       const elapsed = now - prev.date;
       const percentage = totalDuration > 0 ? Math.max(0, Math.min(1, elapsed / totalDuration)) : 0;
       setProgress(percentage);
-
       if (diffSec <= 1 && diffSec >= 0) {
           if (lastFiredPrayerRef.current !== next.name) {
               let msg = "";
@@ -375,7 +367,6 @@ export default function HomeScreen() {
     try {
         const today = new Date().toDateString();
         const cachedStr = await AsyncStorage.getItem('daily_ayet');
-        
         if (cachedStr) {
             const cached = JSON.parse(cachedStr);
             if (cached.date === today) {
@@ -385,7 +376,6 @@ export default function HomeScreen() {
                 return;
             }
         }
-
         setAyetLoading(true); 
         const randomAyahNum = Math.floor(Math.random() * 6236) + 1;
         const response = await axios.get(`${KURAN_API_URL}/ayah/${randomAyahNum}/tr.diyanet?t=${Date.now()}`, { timeout: 6000 });
@@ -394,16 +384,10 @@ export default function HomeScreen() {
         const turkceSure = SURE_ISIMLERI.find(s => s.id === sureNo);
         const sureAdi = turkceSure ? turkceSure.name : item.surah.englishName;
         const ayetData = { content: item.text, source: `${sureAdi} Suresi, ${item.numberInSurah}. Ayet`, id: `ayah-${item.number}` };
-        
         await AsyncStorage.setItem('daily_ayet', JSON.stringify({ date: today, data: ayetData }));
-        
         setAyet(ayetData);
         setIsAyetFav(isFavorite(ayetData.id));
-    } catch (error) { 
-        setAyet({ content: "Rabbiniz şöyle buyurdu: Bana dua edin, duanıza icabet edeyim.", source: "Mü'min Suresi, 60. Ayet", id: "ayah-static" }); 
-    } finally { 
-        setAyetLoading(false); 
-    }
+    } catch (error) { setAyet({ content: "Rabbiniz şöyle buyurdu: Bana dua edin, duanıza icabet edeyim.", source: "Mü'min Suresi, 60. Ayet", id: "ayah-static" }); } finally { setAyetLoading(false); }
   };
 
   const fetchHadis = async () => {
@@ -411,7 +395,6 @@ export default function HomeScreen() {
     try {
         const today = new Date().toDateString();
         const cachedStr = await AsyncStorage.getItem('daily_hadis');
-        
         if (cachedStr) {
             const cached = JSON.parse(cachedStr);
             if (cached.date === today) {
@@ -421,30 +404,22 @@ export default function HomeScreen() {
                 return;
             }
         }
-
         setHadisLoading(true);
         const pool = (GUNLUK_HADISLER && GUNLUK_HADISLER.length > 0) ? GUNLUK_HADISLER : [{ text: "Ameller niyetlere göredir.", source: "Buhari" }];
         const randomIndex = Math.floor(Math.random() * pool.length);
         const newHadis = pool[randomIndex];
         const localId = `hadith-local-${Date.now()}-${randomIndex}`; 
         const hadisData = { content: newHadis.text, source: newHadis.source, id: localId };
-
         await AsyncStorage.setItem('daily_hadis', JSON.stringify({ date: today, data: hadisData }));
-
         setHadis(hadisData);
         setIsHadisFav(isFavorite(localId));
-    } catch (error) {
-        console.log(error);
-    } finally {
-        setHadisLoading(false);
-    }
+    } catch (error) { console.log(error); } finally { setHadisLoading(false); }
   };
 
   const fetchEsma = async () => {
       try {
           const today = new Date().toDateString();
           const cachedStr = await AsyncStorage.getItem('daily_esma');
-          
           if (cachedStr) {
               const cached = JSON.parse(cachedStr);
               if (cached.date === today) {
@@ -453,21 +428,14 @@ export default function HomeScreen() {
                   return;
               }
           }
-
           if (ESMA_TR_LIST && ESMA_TR_LIST.length > 0) {
              const randomIndex = Math.floor(Math.random() * ESMA_TR_LIST.length);
              const newEsma = ESMA_TR_LIST[randomIndex];
-             
              await AsyncStorage.setItem('daily_esma', JSON.stringify({ date: today, data: newEsma }));
-             
              setEsma(newEsma);
              setIsEsmaFav(isFavorite(`esma-${newEsma.number}`)); 
-          } else {
-             setEsma({ number: 1, name: "Allah", arabic: "الله", meaning: "Eşi benzeri olmayan tek İlah." });
-          }
-      } catch (error) {
-          console.log(error);
-      }
+          } else { setEsma({ number: 1, name: "Allah", arabic: "الله", meaning: "Eşi benzeri olmayan tek İlah." }); }
+      } catch (error) { console.log(error); }
   };
 
   const toggleFavoriteItem = (item, type) => {
@@ -571,35 +539,16 @@ export default function HomeScreen() {
              <MapPin size={18} color={theme.primary} />
              <Text style={[styles.newLocationText, { color: theme.text }]}>{locationName}</Text>
           </View>
-
-          {/* ARAÇLAR SATIRI */}
           <View style={styles.newToolsRow}>
-              {/* CAMİLER */}
-              <TouchableOpacity style={[styles.newToolBtn, { backgroundColor: isDarkMode ? theme.iconBg : '#F5F5F5', flex: 1, marginRight: 6 }]} onPress={() => navigation.navigate('Mosque')}>
-                  <MoonStar size={18} color={theme.primary} />
-                  <Text style={[styles.newToolText, { color: theme.primary, fontSize: 13 }]}>Camiler</Text>
-              </TouchableOpacity>
-              
-              {/* İMSAKİYE */}
-              <TouchableOpacity style={[styles.newToolBtn, { backgroundColor: isDarkMode ? theme.iconBg : '#F5F5F5', flex: 1, marginHorizontal: 3 }]} onPress={() => navigation.navigate('Imsakiye')}>
-                  <Calendar size={18} color={theme.primary} />
-                  <Text style={[styles.newToolText, { color: theme.primary, fontSize: 13 }]}>İmsakiye</Text>
-              </TouchableOpacity>
-
-              {/* KIBLE */}
-              <TouchableOpacity style={[styles.newToolBtn, { backgroundColor: isDarkMode ? theme.iconBg : '#F5F5F5', flex: 1, marginLeft: 6 }]} onPress={() => navigation.navigate('Qibla')}>
-                  <Compass size={18} color={theme.primary} />
-                  <Text style={[styles.newToolText, { color: theme.primary, fontSize: 13 }]}>Kıble</Text>
-              </TouchableOpacity>
+              <TouchableOpacity style={[styles.newToolBtn, { backgroundColor: isDarkMode ? theme.iconBg : '#F5F5F5', flex: 1, marginRight: 6 }]} onPress={() => navigation.navigate('Mosque')}><MoonStar size={18} color={theme.primary} /><Text style={[styles.newToolText, { color: theme.primary, fontSize: 13 }]}>Camiler</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.newToolBtn, { backgroundColor: isDarkMode ? theme.iconBg : '#F5F5F5', flex: 1, marginHorizontal: 3 }]} onPress={() => navigation.navigate('Imsakiye')}><Calendar size={18} color={theme.primary} /><Text style={[styles.newToolText, { color: theme.primary, fontSize: 13 }]}>İmsakiye</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.newToolBtn, { backgroundColor: isDarkMode ? theme.iconBg : '#F5F5F5', flex: 1, marginLeft: 6 }]} onPress={() => navigation.navigate('Qibla')}><Compass size={18} color={theme.primary} /><Text style={[styles.newToolText, { color: theme.primary, fontSize: 13 }]}>Kıble</Text></TouchableOpacity>
           </View>
-
           {!loading && vakitler && (
             <View style={styles.timerWrapper}>
                <Text style={[styles.nextVakitLabel, { color: theme.subText }]}>{nextVakitName} vaktine kalan süre:</Text>
                <Text style={[styles.timerText, { color: theme.text }]}>{timeLeft}</Text>
-               <View style={[styles.progressBarBg, { backgroundColor: isDarkMode ? '#2C2C2E' : '#E8F5E9' }]}>
-                  <View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: theme.primary }]} />
-               </View>
+               <View style={[styles.progressBarBg, { backgroundColor: isDarkMode ? '#2C2C2E' : '#E8F5E9' }]}><View style={[styles.progressBarFill, { width: `${progress * 100}%`, backgroundColor: theme.primary }]} /></View>
             </View>
           )}
           {loading ? <ActivityIndicator color={theme.primary} style={{ marginTop: 20 }} /> : (
@@ -612,6 +561,9 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+
+        {/* 🔥 REKLAM ALANI 1 (Vakitlerden Hemen Sonra) */}
+        {renderBannerAd()}
 
         {/* AYET KARTI */}
         <View style={styles.shareableWrapper}>
@@ -630,9 +582,7 @@ export default function HomeScreen() {
         {esma && (
             <View style={styles.shareableWrapper}>
               <ViewShot ref={esmaRef} options={{ format: 'png', quality: 0.9 }} style={[styles.mainCard, { backgroundColor: isDarkMode ? '#4A148C' : '#7B1FA2' }]}>
-                <View style={styles.cardHeader}>
-                    <View style={styles.tagContainer}><Star size={16} color="#FFF" /><Text style={[styles.tagText, { color: '#FFF' }]}>Günün Esması</Text></View>
-                </View>
+                <View style={styles.cardHeader}><View style={styles.tagContainer}><Star size={16} color="#FFF" /><Text style={[styles.tagText, { color: '#FFF' }]}>Günün Esması</Text></View></View>
                 <Text style={{ color: '#FFF', fontSize: 32, textAlign: 'center', marginBottom: 5, fontWeight: 'bold' }}>{esma.arabic || ""}</Text>
                 <Text style={[styles.quoteText, { color: '#FFF', fontSize: 22, textAlign: 'center', marginBottom: 5 }]}>{esma.name}</Text>
                 <Text style={[styles.tagText, { color: '#FFF', textAlign: 'center', fontStyle: 'italic', opacity: 0.9, fontSize: 16 }]}>"{esma.meaning}"</Text>
@@ -661,79 +611,28 @@ export default function HomeScreen() {
 
         {/* HEDEFLER */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>Bugünkü Hedeflerin</Text>
-              <TouchableOpacity onPress={() => setModalVisible(true)} style={[styles.addButton, { backgroundColor: isDarkMode ? theme.iconBg : '#E8F5E9' }]}><Plus size={20} color={theme.primary} /></TouchableOpacity>
-          </View>
+          <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: theme.text }]}>Bugünkü Hedeflerin</Text><TouchableOpacity onPress={() => setModalVisible(true)} style={[styles.addButton, { backgroundColor: isDarkMode ? theme.iconBg : '#E8F5E9' }]}><Plus size={20} color={theme.primary} /></TouchableOpacity></View>
           {tasks.map(task => (
-            <View key={task.id} style={[styles.taskRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
-               <TouchableOpacity style={styles.taskClickable} onPress={() => toggleTask(task.id, task.tamamlandi)}>
-                  <CheckCircle2 size={22} color={task.tamamlandi === 1 ? theme.primary : theme.subText} />
-                  <Text style={[styles.taskText, { color: theme.text }, task.tamamlandi === 1 && styles.taskTextDone]}>{task.baslik}</Text>
-               </TouchableOpacity>
-               <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteTask(task.id)}>
-                  <Trash2 size={20} color={theme.subText} />
-               </TouchableOpacity>
-            </View>
+            <View key={task.id} style={[styles.taskRow, { backgroundColor: theme.card, borderColor: theme.border }]}><TouchableOpacity style={styles.taskClickable} onPress={() => toggleTask(task.id, task.tamamlandi)}><CheckCircle2 size={22} color={task.tamamlandi === 1 ? theme.primary : theme.subText} /><Text style={[styles.taskText, { color: theme.text }, task.tamamlandi === 1 && styles.taskTextDone]}>{task.baslik}</Text></TouchableOpacity><TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteTask(task.id)}><Trash2 size={20} color={theme.subText} /></TouchableOpacity></View>
           ))}
         </View>
+
+        {/* 🔥 REKLAM ALANI 2 (En Alt Kısım) */}
+        {renderBannerAd()}
+
       </ScrollView>
 
       {/* MODALLAR */}
       <Modal animationType="fade" transparent visible={prayerModalVisible}>
-         <View style={styles.celebrationOverlay}>
-             <View style={[styles.celebrationCard, { backgroundColor: theme.card, borderColor: theme.primary, borderWidth: 2 }]}>
-                <Text style={{fontSize: 50, marginBottom: 15}}>🕌</Text>
-                <Text style={[styles.celebrationTitle, { color: theme.primary, textAlign: 'center' }]}>{currentPrayerTime?.name} Vakti!</Text>
-                <Text style={[styles.celebrationText, { color: theme.text, fontSize: 18, marginVertical: 15, textAlign: 'center' }]}>{currentPrayerTime?.msg}</Text>
-                <TouchableOpacity style={[styles.celebrationButton, { backgroundColor: theme.primary, width: '80%' }]} onPress={() => setPrayerModalVisible(false)}>
-                    <Text style={[styles.celebrationButtonText, { textAlign: 'center' }]}>Allah Kabul Etsin</Text>
-                </TouchableOpacity>
-             </View>
-         </View>
+         <View style={styles.celebrationOverlay}><View style={[styles.celebrationCard, { backgroundColor: theme.card, borderColor: theme.primary, borderWidth: 2 }]}><Text style={{fontSize: 50, marginBottom: 15}}>🕌</Text><Text style={[styles.celebrationTitle, { color: theme.primary, textAlign: 'center' }]}>{currentPrayerTime?.name} Vakti!</Text><Text style={[styles.celebrationText, { color: theme.text, fontSize: 18, marginVertical: 15, textAlign: 'center' }]}>{currentPrayerTime?.msg}</Text><TouchableOpacity style={[styles.celebrationButton, { backgroundColor: theme.primary, width: '80%' }]} onPress={() => setPrayerModalVisible(false)}><Text style={[styles.celebrationButtonText, { textAlign: 'center' }]}>Allah Kabul Etsin</Text></TouchableOpacity></View></View>
       </Modal>
 
-      {/* 🔥 HEDEF EKLEME MODALI KLAVYE DÜZELTMESİ EKLENDİ */}
       <Modal animationType="slide" transparent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : undefined} 
-          style={{ flex: 1 }}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalOverlay}>
-              <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: theme.text }]}>Yeni Hedef Ekle</Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)}><X size={24} color={theme.subText} /></TouchableOpacity>
-                </View>
-                <TextInput 
-                  style={[styles.input, { backgroundColor: theme.background, color: theme.text }]} 
-                  placeholder="Hedef başlığını yazın..." 
-                  placeholderTextColor={theme.subText} 
-                  value={newTaskTitle} 
-                  onChangeText={setNewTaskTitle} 
-                  autoFocus={true} 
-                />
-                <TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={handleSaveTask}>
-                  <Text style={styles.saveButtonText}>Listeye Ekle</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "padding"} style={{ flex: 1 }}><TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPressOut={() => { Keyboard.dismiss(); setModalVisible(false); }}><TouchableWithoutFeedback><View style={[styles.modalContent, { backgroundColor: theme.card }]}><View style={styles.modalHeader}><Text style={[styles.modalTitle, { color: theme.text }]}>Yeni Hedef Ekle</Text><TouchableOpacity onPress={() => { Keyboard.dismiss(); setModalVisible(false); }}><X size={24} color={theme.subText} /></TouchableOpacity></View><TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.text }]} placeholder="Hedef başlığını yazın..." placeholderTextColor={theme.subText} value={newTaskTitle} onChangeText={setNewTaskTitle} autoFocus={true} /><TouchableOpacity style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={handleSaveTask}><Text style={styles.saveButtonText}>Listeye Ekle</Text></TouchableOpacity></View></TouchableWithoutFeedback></TouchableOpacity></KeyboardAvoidingView>
       </Modal>
 
       <Modal animationType="fade" transparent visible={celebrationVisible}>
-         <View style={styles.celebrationOverlay}>
-             <View style={[styles.celebrationCard, { backgroundColor: theme.card, borderColor: theme.primary }]}>
-                <Text style={{fontSize: 50, marginBottom: 10}}>🎉</Text>
-                <Text style={[styles.celebrationTitle, { color: theme.primary }]}>Tebrikler!</Text>
-                <Text style={[styles.celebrationText, { color: theme.text }]}>{celebrationMsg}</Text>
-                <TouchableOpacity style={[styles.celebrationButton, { backgroundColor: theme.primary }]} onPress={() => setCelebrationVisible(false)}>
-                    <Text style={styles.celebrationButtonText}>Harika!</Text>
-                </TouchableOpacity>
-             </View>
-         </View>
+         <View style={styles.celebrationOverlay}><View style={[styles.celebrationCard, { backgroundColor: theme.card, borderColor: theme.primary }]}><Text style={{fontSize: 50, marginBottom: 10}}>🎉</Text><Text style={[styles.celebrationTitle, { color: theme.primary }]}>Tebrikler!</Text><Text style={[styles.celebrationText, { color: theme.text }]}>{celebrationMsg}</Text><TouchableOpacity style={[styles.celebrationButton, { backgroundColor: theme.primary }]} onPress={() => setCelebrationVisible(false)}><Text style={styles.celebrationButtonText}>Harika!</Text></TouchableOpacity></View></View>
       </Modal>
     </SafeAreaView>
   );
@@ -749,8 +648,6 @@ const styles = StyleSheet.create({
   header: { marginTop: 20, marginBottom: 25 },
   dateText: { fontSize: 14, fontWeight: '500', textTransform: 'uppercase' },
   welcomeText: { fontSize: 26, fontWeight: 'bold', marginTop: 4 },
-  
-  // Tooltip
   tooltipContainer: { position: 'absolute', top: Platform.OS === 'ios' ? 100 : 80, right: 20, width: width * 0.7, borderRadius: 20, padding: 15, zIndex: 10000, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 10 },
   tooltipContent: { alignItems: 'flex-start' },
   tooltipHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
@@ -759,7 +656,6 @@ const styles = StyleSheet.create({
   tooltipButton: { marginTop: 15, backgroundColor: '#FFF', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 12, alignSelf: 'flex-end' },
   tooltipButtonText: { fontWeight: '800', fontSize: 13 },
   tooltipArrow: { position: 'absolute', top: -10, right: 15, width: 0, height: 0, borderLeftWidth: 10, borderRightWidth: 10, borderBottomWidth: 10, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
-
   moodSection: { marginBottom: 25 },
   moodList: { flexDirection: 'row' },
   moodItem: { alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16, marginRight: 10, borderWidth: 1, minWidth: 85 },
@@ -769,22 +665,18 @@ const styles = StyleSheet.create({
   prescriptionTitle: { fontWeight: 'bold', fontSize: 13, marginBottom: 8, textTransform: 'uppercase', opacity: 0.8 },
   prescriptionText: { fontSize: 16, fontStyle: 'italic', lineHeight: 24, marginBottom: 8, fontWeight: '500' },
   prescriptionSource: { fontSize: 12, fontWeight: 'bold', textAlign: 'right' },
-
   streakSection: { marginBottom: 25 },
   streakContainer: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderRadius: 20, borderWidth: 1 },
   dayColumn: { alignItems: 'center', flex: 1 },
   dayName: { fontSize: 11, marginBottom: 8, fontWeight: '600', textTransform: 'uppercase' },
   streakCircle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   dayNumber: { fontSize: 12, fontWeight: 'bold' },
-
   vakitCard: { borderRadius: 20, padding: 18, marginBottom: 25, elevation: 2 },
   newLocationHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 15 },
   newLocationText: { fontSize: 16, fontWeight: 'bold', marginLeft: 8, textAlign: 'center' },
-  
   newToolsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
   newToolBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12 },
   newToolText: { fontSize: 14, fontWeight: 'bold', marginLeft: 6 },
-
   timerWrapper: { alignItems: 'center', marginBottom: 20, paddingBottom: 10 },
   nextVakitLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
   timerText: { fontSize: 28, fontWeight: 'bold', marginBottom: 12, fontVariant: ['tabular-nums'] },
@@ -794,7 +686,6 @@ const styles = StyleSheet.create({
   vakitBox: { alignItems: 'center' },
   vakitAd: { fontSize: 11, marginBottom: 4, fontWeight: '600' },
   vakitSaat: { fontSize: 13, fontWeight: 'bold' },
-
   shareableWrapper: { marginBottom: 25 },
   mainCard: { borderRadius: 24, padding: 24, elevation: 8 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
@@ -804,7 +695,6 @@ const styles = StyleSheet.create({
   watermark: { marginTop: 15, fontSize: 10, textAlign: 'center', fontWeight: 'bold' },
   cardActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10, paddingRight: 10 },
   actionIcon: { marginLeft: 20 },
-
   section: { marginTop: 10, marginBottom: 25 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold' },
@@ -814,7 +704,6 @@ const styles = StyleSheet.create({
   deleteButton: { padding: 5 },
   taskText: { marginLeft: 12, fontSize: 16, fontWeight: '500' },
   taskTextDone: { textDecorationLine: 'line-through', opacity: 0.6 },
-
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -822,11 +711,19 @@ const styles = StyleSheet.create({
   input: { padding: 15, borderRadius: 12, fontSize: 16, marginBottom: 20 },
   saveButton: { padding: 16, borderRadius: 12, alignItems: 'center' },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-
   celebrationOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   celebrationCard: { width: '80%', padding: 25, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 2, elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
   celebrationTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
   celebrationText: { fontSize: 16, textAlign: 'center', marginBottom: 20, lineHeight: 22, fontWeight: '500' },
   celebrationButton: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25 },
-  celebrationButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' }
+  celebrationButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  // 🔥 Reklam Alanı Stili
+  adContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    width: '100%',
+    backgroundColor: 'transparent',
+    marginBottom: 20,
+  },
 });

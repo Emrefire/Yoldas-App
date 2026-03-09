@@ -10,6 +10,12 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 
+// 🔥 REKLAM KÜTÜPHANESİ EKLENDİ
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+
+// 💡 Canlıya çıkarken kendi Banner ID'ni buraya yazacaksın.
+const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy'; 
+
 const { width, height } = Dimensions.get('window');
 const COMPASS_SIZE = Math.min(width * 0.75, height * 0.35);
 const HALF_SIZE = COMPASS_SIZE / 2;
@@ -23,7 +29,6 @@ export default function QiblaScreen() {
   const [isFocused, setIsFocused] = useState(false);
   const [locationName, setLocationName] = useState("Konum Bekleniyor...");
 
-  // 🔥 PERFORMANS İÇİN REFERANSLAR (Kasmayı önleyen sistem)
   const isFocusedRef = useRef(false);
   const qiblaAngleRef = useRef(0);
   const lastHeadingRef = useRef(0);
@@ -36,14 +41,12 @@ export default function QiblaScreen() {
     const startCompass = async () => {
       await getLocationAndQibla();
 
-      // Pusula veri hızını 100ms yapıyoruz (Gereksiz render'ı engeller, Animasyon ile pürüzsüz akar)
       Magnetometer.setUpdateInterval(100); 
       
       subscription = Magnetometer.addListener((data) => {
         let angle = Math.atan2(-data.x, data.y) * (180 / Math.PI);
         if (angle < 0) angle += 360;
 
-        // 🔥 1. KÜMÜLATİF DÖNÜŞ (360 -> 0 geçerken pusulanın çıldırmasını/geri sarmasını engeller)
         let diff = angle - lastHeadingRef.current;
         if (diff > 180) diff -= 360;
         else if (diff < -180) diff += 360;
@@ -51,18 +54,15 @@ export default function QiblaScreen() {
         cumulativeHeadingRef.current += diff;
         lastHeadingRef.current = angle;
 
-        // NATIVE DRIVER İLE YAĞ GİBİ DÖNÜŞ (Telefonun ekran kartını kullanır, kasmayı %100 çözer)
         Animated.timing(spinAnim, {
           toValue: -cumulativeHeadingRef.current,
           duration: 100,
           useNativeDriver: true,
         }).start();
 
-        // Rakamları güncelle (Sadece değişirse güncelle ki ekran yorulmasın)
         const currentHeading = Math.round(angle);
         setHeading(prev => (Math.abs(prev - currentHeading) >= 1 ? currentHeading : prev));
         
-        // 🔥 2. KIBLE HESAPLAMA (Render'ı tetiklemeden Ref üzerinden kontrol)
         let currentQibla = qiblaAngleRef.current;
         if (currentQibla > 0) {
           let qDiff = Math.abs(currentHeading - currentQibla);
@@ -87,7 +87,7 @@ export default function QiblaScreen() {
     startCompass();
 
     return () => { if (subscription) subscription.remove(); };
-  }, []); // <-- Dependency array boş! Artık her kıbleye geldiğinde dinleyici çöküp baştan başlamayacak!
+  }, []);
 
   const getLocationAndQibla = async () => {
     try {
@@ -105,7 +105,7 @@ export default function QiblaScreen() {
       
       const finalAngle = Math.round(angle);
       setQiblaAngle(finalAngle);
-      qiblaAngleRef.current = finalAngle; // Ref'i de güncelliyoruz
+      qiblaAngleRef.current = finalAngle; 
     } catch (e) { console.log(e); }
   };
 
@@ -116,7 +116,6 @@ export default function QiblaScreen() {
     });
   };
 
-  // 🔥 PUSULA ÇİZGİLERİNİ HAFIZAYA AL (Telefonu yormasını engeller)
   const renderCompassTicks = useMemo(() => {
     const ticks = [];
     for (let i = 0; i < 360; i += 15) {
@@ -128,7 +127,6 @@ export default function QiblaScreen() {
     return ticks;
   }, [theme]);
 
-  // Animasyonu dereceye çeviren araç
   const spinInterpolation = spinAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '1deg']
@@ -169,12 +167,11 @@ export default function QiblaScreen() {
             <View style={[styles.pointerLine, { backgroundColor: isFocused ? theme.primary : '#FF3B30' }]} />
           </View>
 
-          {/* 🔥 DÖNEN PUSULA (Artık Animated.View ve Native Driver kullanıyor) */}
           <Animated.View style={[styles.compassCircle, { 
             width: COMPASS_SIZE, height: COMPASS_SIZE, borderRadius: COMPASS_SIZE / 2, 
             backgroundColor: theme.card, borderColor: isFocused ? theme.primary : theme.border,
             shadowColor: isFocused ? theme.primary : "#000",
-            transform: [{ rotate: spinInterpolation }] // Kusursuz dönüş
+            transform: [{ rotate: spinInterpolation }] 
           }]}>
             {renderCompassTicks}
             <View style={[styles.directionMarker, { transform: [{ translateY: -HALF_SIZE + 30 }] }]}><Text style={[styles.cardinalText, { color: '#FF3B30' }]}>N</Text></View>
@@ -221,8 +218,21 @@ export default function QiblaScreen() {
             </View>
         </TouchableOpacity>
 
-        <View style={{ height: 50 }} />
+        {/* Reklamın içeriği kapatmaması için alt boşluk */}
+        <View style={{ height: 80 }} />
       </ScrollView>
+
+      {/* 🔥 SABİT REKLAM ALANI (Ekranın en altına sabitlendi) */}
+      <View style={[styles.adContainer, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
+        <BannerAd
+          unitId={adUnitId}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{
+            requestNonPersonalizedAdsOnly: true,
+          }}
+        />
+      </View>
+
     </SafeAreaView>
   );
 }
@@ -278,5 +288,18 @@ const styles = StyleSheet.create({
   aiBoxCenter: { flex: 1 },
   aiTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
   aiQuestion: { fontSize: 13, fontWeight: '500', fontStyle: 'italic' },
-  aiBoxRight: { marginLeft: 10 }
+  aiBoxRight: { marginLeft: 10 },
+
+  // 🔥 REKLAM ALANI STİLİ
+  adContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 5,
+    borderTopWidth: 1,
+    position: 'absolute',
+    bottom: 0,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 0, 
+    zIndex: 100
+  }
 });

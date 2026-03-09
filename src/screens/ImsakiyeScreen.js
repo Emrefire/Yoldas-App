@@ -11,33 +11,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext'; 
 
 const { width } = Dimensions.get('window');
-
-// 🔥 API LINKI GÜVENLİ BÖLGEDEN (ENV) ÇEKİLİYOR
 const CALENDAR_API_URL = process.env.EXPO_PUBLIC_CALENDAR_API_URL;
 
-const TR_GUNLER = {
-  "Sunday": "Pazar", "Monday": "Pazartesi", "Tuesday": "Salı", "Wednesday": "Çarşamba",
-  "Thursday": "Perşembe", "Friday": "Cuma", "Saturday": "Cumartesi"
-};
+const TR_GUNLER = { "Sunday": "Pazar", "Monday": "Pazartesi", "Tuesday": "Salı", "Wednesday": "Çarşamba", "Thursday": "Perşembe", "Friday": "Cuma", "Saturday": "Cumartesi" };
+const TR_AYLAR = { "January": "Ocak", "February": "Şubat", "March": "Mart", "April": "Nisan", "May": "Mayıs", "June": "Haziran", "July": "Temmuz", "August": "Ağustos", "September": "Eylül", "October": "Ekim", "November": "Kasım", "December": "Aralık" };
+const TR_HICRI_AYLAR = { "Muharram": "Muharrem", "Safar": "Safer", "Rabi' al-awwal": "Rebiülevvel", "Rabi' al-thani": "Rebiülahir", "Jumada al-awwal": "Cemaziyelevvel", "Jumada al-thani": "Cemaziyelahir", "Rajab": "Recep", "Sha'ban": "Şaban", "Ramadan": "Ramazan", "Shawwal": "Şevval", "Dhu al-Qi'dah": "Zilkade", "Dhu al-Hijjah": "Zilhicce" };
 
-const TR_AYLAR = {
-  "January": "Ocak", "February": "Şubat", "March": "Mart", "April": "Nisan", "May": "Mayıs", "June": "Haziran",
-  "July": "Temmuz", "August": "Ağustos", "September": "Eylül", "October": "Ekim", "November": "Kasım", "December": "Aralık"
-};
-
-const TR_HICRI_AYLAR = {
-  "Muharram": "Muharrem", "al-Muḥarram": "Muharrem", "Safar": "Safer", 
-  "Rabi' al-awwal": "Rebiülevvel", "Rabi' al-Awwal": "Rebiülevvel", "Rabī‘ al-awwal": "Rebiülevvel",
-  "Rabi' al-thani": "Rebiülahir", "Rabi' al-Thani": "Rebiülahir", "Rabī‘ al-thānī": "Rebiülahir",
-  "Jumada al-awwal": "Cemaziyelevvel", "Jumādā al-ūlā": "Cemaziyelevvel",
-  "Jumada al-thani": "Cemaziyelahir", "Jumādā al-ākhirah": "Cemaziyelahir",
-  "Rajab": "Recep",
-  "Sha'ban": "Şaban", "Shaban": "Şaban", "Sha‘bān": "Şaban","Sha’bān": "Şaban",
-  "Ramadan": "Ramazan", "Ramadhan": "Ramazan", "Ramaḍān": "Ramazan",
-  "Shawwal": "Şevval", "Shawwāl": "Şevval",
-  "Dhu al-Qi'dah": "Zilkade", "Dhul Qadah": "Zilkade", "Dhū al-Qa‘dah": "Zilkade",
-  "Dhu al-Hijjah": "Zilhicce", "Dhul Hijjah": "Zilhicce", "Dhū al-Ḥijjah": "Zilhicce"
-};
+// Önemli: Liste eleman yüksekliği sabitlenmeli (Crash koruması için)
+const ITEM_HEIGHT = 165; 
 
 export default function ImsakiyeScreen() {
   const { theme, isDarkMode } = useTheme();
@@ -49,7 +30,6 @@ export default function ImsakiyeScreen() {
   const [currentDayIndex, setCurrentDayIndex] = useState(-1);
   const [city, setCity] = useState("Konum...");
   const [hijriDateStr, setHijriDateStr] = useState("");
-  
   const [countdown, setCountdown] = useState("--:--:--");
   const [nextVakitName, setNextVakitName] = useState("Vakit Hesaplanıyor...");
 
@@ -67,10 +47,7 @@ export default function ImsakiyeScreen() {
     }
   }, [imsakiyeData, currentDayIndex]);
 
-  // 🔥 YENİ: KUSURSUZ CACHE (ÖN BELLEK) SİSTEMİ EKLENDİ
   const fetchTwoMonthsData = async () => {
-    if (imsakiyeData.length === 0) setLoading(true); // Sadece boşsa yükleniyor çıkar
-
     try {
       const useAutoLocationStr = await AsyncStorage.getItem('useAutoLocation');
       const userCity = await AsyncStorage.getItem('userCity');
@@ -82,305 +59,177 @@ export default function ImsakiyeScreen() {
       const nextMonth = month === 12 ? 1 : month + 1;
       const nextYear = month === 12 ? year + 1 : year;
 
-      // 🔥 1. CACHE KONTROLÜ (Bu ayın verisi zaten var mı?)
       const cacheKey = `imsakiye_cache_${year}_${month}`;
       const cachedStr = await AsyncStorage.getItem(cacheKey);
 
       if (cachedStr) {
         const cached = JSON.parse(cachedStr);
-        // Eğer konum ayarı dünküyle aynıysa direkt ekrana bas, bekleme yapma!
         if (cached.settingAuto === useAutoLocation && cached.settingCity === userCity) {
-            processAndSetData(cached.rawList, cached.location);
-            return;
+          processAndSetData(cached.rawList, cached.location);
+          return;
         }
       }
 
-      // 🔥 2. CACHE YOKSA VEYA KONUM DEĞİŞTİYSE İNTERNETTEN ÇEK
       let lat = 41.0082, lon = 28.9784, displayName = "İstanbul"; 
 
       if (!useAutoLocation && userCity) {
-         displayName = userCity;
-         let geocodeResult = await Location.geocodeAsync(userCity);
-         if (geocodeResult.length > 0) {
-             lat = geocodeResult[0].latitude;
-             lon = geocodeResult[0].longitude;
-         }
+        displayName = userCity;
+        let geocodeResult = await Location.geocodeAsync(userCity);
+        if (geocodeResult.length > 0) {
+          lat = geocodeResult[0].latitude;
+          lon = geocodeResult[0].longitude;
+        }
       } else {
-         let { status } = await Location.requestForegroundPermissionsAsync();
-         if (status === 'granted') {
-            let location = await Location.getCurrentPositionAsync({});
-            lat = location.coords.latitude;
-            lon = location.coords.longitude;
-            let reverseGeocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
-            if (reverseGeocode.length > 0) {
-              displayName = reverseGeocode[0].city || reverseGeocode[0].region || "Konum";
-            }
-         }
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          let location = await Location.getCurrentPositionAsync({});
+          lat = location.coords.latitude;
+          lon = location.coords.longitude;
+          let revGeocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+          if (revGeocode.length > 0) displayName = revGeocode[0].city || revGeocode[0].region || "Konum";
+        }
       }
 
-      // API'ye gidiyoruz (Sadece 1 kez yapacak)
       const [res1, res2] = await Promise.all([
         axios.get(`${CALENDAR_API_URL}/${year}/${month}`, { params: { latitude: lat, longitude: lon, method: 13 } }),
         axios.get(`${CALENDAR_API_URL}/${nextYear}/${nextMonth}`, { params: { latitude: lat, longitude: lon, method: 13 } })
       ]);
 
       const rawList = [...res1.data.data, ...res2.data.data];
-
-      // Veriyi Telefonun Hafızasına (Cache) Kaydet (Bir dahaki sefere anında açılsın)
-      const cacheData = {
-          rawList: rawList,
-          location: displayName,
-          settingAuto: useAutoLocation,
-          settingCity: userCity
-      };
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
-
-      // Veriyi Ekrana Çizdir
+      await AsyncStorage.setItem(cacheKey, JSON.stringify({ rawList, location: displayName, settingAuto: useAutoLocation, settingCity: userCity }));
       processAndSetData(rawList, displayName);
 
     } catch (error) {
       console.error("Imsakiye API Hatası:", error);
       setLoading(false);
-      setNextVakitName("Bağlantı Hatası");
-      setCountdown("--:--:--");
     }
   };
 
-  // Veriyi İşleme ve Ekrana Basma Fonksiyonu
   const processAndSetData = (rawList, displayName) => {
-      let processedList = [];
-      let lastMonthTitle = "";
+    let processedList = [];
+    let lastMonthTitle = "";
 
-      rawList.forEach((item) => {
-          const engMonth = item.date.gregorian.month.en;
-          const trMonth = TR_AYLAR[engMonth] || engMonth;
-          const yearVal = item.date.gregorian.year;
-          const monthTitle = `${trMonth} ${yearVal}`;
-
-          if (monthTitle !== lastMonthTitle) {
-              processedList.push({ type: 'month_header', title: monthTitle });
-              lastMonthTitle = monthTitle;
-          }
-          processedList.push(item);
-      });
-
-      const finalList = [{ type: 'table_header' }, ...processedList];
-      setImsakiyeData(finalList);
-      setCity(displayName);
-      
-      const d = new Date();
-      const todayStr = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
-      
-      const todayData = rawList.find(d => d.date && d.date.gregorian.date === todayStr);
-      if(todayData) {
-        const hMonthEng = todayData.date.hijri.month.en;
-        const hMonthTr = TR_HICRI_AYLAR[hMonthEng] || hMonthEng; 
-        setHijriDateStr(`${todayData.date.hijri.day} ${hMonthTr} ${todayData.date.hijri.year}`);
+    rawList.forEach((item) => {
+      const monthTitle = `${TR_AYLAR[item.date.gregorian.month.en] || item.date.gregorian.month.en} ${item.date.gregorian.year}`;
+      if (monthTitle !== lastMonthTitle) {
+        processedList.push({ type: 'month_header', title: monthTitle });
+        lastMonthTitle = monthTitle;
       }
+      processedList.push(item);
+    });
 
-      const foundIndex = finalList.findIndex(d => d.date && d.date.gregorian.date === todayStr);
-      setCurrentDayIndex(foundIndex);
-      setLoading(false);
+    const finalList = [{ type: 'table_header' }, ...processedList];
+    setImsakiyeData(finalList);
+    setCity(displayName);
+    
+    const d = new Date();
+    const todayStr = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+    const todayData = rawList.find(d => d.date?.gregorian?.date === todayStr);
+    
+    if(todayData) setHijriDateStr(`${todayData.date.hijri.day} ${TR_HICRI_AYLAR[todayData.date.hijri.month.en] || todayData.date.hijri.month.en} ${todayData.date.hijri.year}`);
 
-      setTimeout(() => {
-        if (flatListRef.current && foundIndex !== -1) {
-          flatListRef.current.scrollToIndex({ index: foundIndex, animated: true, viewPosition: 0.15 });
-        }
-      }, 300);
+    const foundIndex = finalList.findIndex(d => d.date?.gregorian?.date === todayStr);
+    setCurrentDayIndex(foundIndex);
+    setLoading(false);
+
+    // CRASH KORUMALI SCROLL
+    if (foundIndex !== -1) {
+        setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index: foundIndex, animated: true, viewPosition: 0.2 });
+        }, 500);
+    }
   };
 
-
   const calculateCountdown = () => {
-    if (currentDayIndex === -1 || !imsakiyeData[currentDayIndex]) return;
+    // SIKI KONTROL (Undefined crash koruması)
+    if (currentDayIndex === -1 || !imsakiyeData[currentDayIndex]?.timings) return;
     
     const todayData = imsakiyeData[currentDayIndex];
-    if (!todayData || !todayData.timings) return; 
-
     const timings = todayData.timings;
     const now = new Date();
-    
-    const dateParts = todayData.date.gregorian.date.split('-'); 
-    const year = parseInt(dateParts[2], 10);
-    const month = parseInt(dateParts[1], 10) - 1; 
-    const day = parseInt(dateParts[0], 10);
+    const [d, m, y] = todayData.date.gregorian.date.split('-').map(Number);
 
     const parseTime = (timeStr) => {
-      const [timeMatch] = timeStr.split(' '); 
-      const [h, m] = timeMatch.split(':').map(num => parseInt(num, 10));
-      return new Date(year, month, day, h, m, 0);
+      const [h, min] = timeStr.split(' ')[0].split(':').map(Number);
+      return new Date(y, m - 1, d, h, min, 0);
     };
 
     const imsakTime = parseTime(timings.Fajr);
     const aksamTime = parseTime(timings.Maghrib);
-    
     let targetTime, label;
 
-    if (now < imsakTime) {
-      targetTime = imsakTime; 
-      label = "Sahura Kalan";
-    } else if (now < aksamTime) {
-      targetTime = aksamTime; 
-      label = "İftara Kalan";
-    } else {
-      let nextIndex = currentDayIndex + 1;
-      while (nextIndex < imsakiyeData.length && (!imsakiyeData[nextIndex] || !imsakiyeData[nextIndex].timings)) {
-          nextIndex++;
-      }
-
-      if (imsakiyeData[nextIndex] && imsakiyeData[nextIndex].timings) {
-         const nextData = imsakiyeData[nextIndex];
-         const nextParts = nextData.date.gregorian.date.split('-');
-         const nYear = parseInt(nextParts[2], 10);
-         const nMonth = parseInt(nextParts[1], 10) - 1;
-         const nDay = parseInt(nextParts[0], 10);
-         
-         const [nextTimeMatch] = nextData.timings.Fajr.split(' ');
-         const [nH, nM] = nextTimeMatch.split(':').map(num => parseInt(num, 10));
-         targetTime = new Date(nYear, nMonth, nDay, nH, nM, 0);
-      } else {
-         targetTime = new Date(imsakTime.getTime() + 24 * 60 * 60 * 1000); 
-      }
+    if (now < imsakTime) { targetTime = imsakTime; label = "Sahura Kalan"; }
+    else if (now < aksamTime) { targetTime = aksamTime; label = "İftara Kalan"; }
+    else {
+      let nextIdx = currentDayIndex + 1;
+      while (nextIdx < imsakiyeData.length && !imsakiyeData[nextIdx]?.timings) nextIdx++;
+      if (imsakiyeData[nextIdx]) {
+        const [nd, nm, ny] = imsakiyeData[nextIdx].date.gregorian.date.split('-').map(Number);
+        const [nh, nmin] = imsakiyeData[nextIdx].timings.Fajr.split(' ')[0].split(':').map(Number);
+        targetTime = new Date(ny, nm - 1, nd, nh, nmin, 0);
+      } else { targetTime = new Date(imsakTime.getTime() + 86400000); }
       label = "Yarın Sahura";
     }
 
-    const diff = targetTime.getTime() - now.getTime();
-    if (diff <= 0) {
-        setCountdown("00:00:00");
-        return;
-    }
-
-    const h = Math.floor(diff / (1000 * 60 * 60));
-    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const s = Math.floor((diff % (1000 * 60)) / 1000);
-    
-    const formattedH = String(h).padStart(2, '0');
-    const formattedM = String(m).padStart(2, '0');
-    const formattedS = String(s).padStart(2, '0');
-
-    setCountdown(`${formattedH}:${formattedM}:${formattedS}`);
+    const diff = targetTime - now;
+    if (diff <= 0) { setCountdown("00:00:00"); return; }
+    const h = Math.floor(diff / 3600000);
+    const min = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    setCountdown(`${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
     setNextVakitName(label);
   };
 
-  const renderHeader = () => (
-    <View style={styles.headerCardWrapper}>
-      <View style={[styles.timerCard, { backgroundColor: theme.primary }]}>
-        <View style={styles.cardTopRow}>
-           <View style={styles.badgeContainer}>
-              <MapPin size={12} color="#FFF" style={{marginRight:4}} />
-              <Text style={styles.badgeText} numberOfLines={1}>{city}</Text>
-           </View>
-           <View style={[styles.badgeContainer, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-              <Moon size={10} color="#FFF" style={{marginRight:4}} />
-              <Text style={styles.badgeText}>{hijriDateStr || "Hicri Takvim"}</Text>
-           </View>
-        </View>
-
-        <View style={styles.timerMain}>
-           <Text style={styles.timerLabel}>{nextVakitName}</Text>
-           <Text style={styles.timerValue}>{countdown}</Text>
-        </View>
-
-        <Calendar size={120} color="rgba(255,255,255,0.08)" style={styles.bgIcon} />
-      </View>
-    </View>
-  );
-
   const renderItem = ({ item, index }) => {
-    if (item.type === 'table_header') return (
-        <View style={[styles.tableHeader, { backgroundColor: theme.background }]}> 
-          <Text style={[styles.colDateHeader, { color: theme.subText }]}>GÜN</Text>
-          <Text style={[styles.colTimeHeader, { color: theme.text, fontWeight:'bold' }]}>İMSAK</Text>
-          <Text style={[styles.colTimeHeader, { color: theme.subText }]}>GÜN</Text>
-          <Text style={[styles.colTimeHeader, { color: theme.subText }]}>ÖĞLE</Text>
-          <Text style={[styles.colTimeHeader, { color: theme.subText }]}>İKND</Text>
-          <Text style={[styles.colTimeHeader, { color: theme.text, fontWeight:'bold' }]}>İFTAR</Text>
-          <Text style={[styles.colTimeHeader, { color: theme.subText }]}>YATS</Text>
-        </View>
-    );
-
-    if (item.type === 'month_header') return (
-        <View style={styles.monthHeaderContainer}>
-            <Text style={[styles.monthHeaderText, { color: theme.primary }]}>{item.title}</Text>
-            <View style={[styles.monthHeaderLine, { backgroundColor: theme.border }]} />
-        </View>
-    );
-
-    if (!item.date || !item.timings) return null;
+    if (item.type === 'table_header') return <View style={[styles.tableHeader, { backgroundColor: theme.background }]}><Text style={styles.colDateHeader}>GÜN</Text><Text style={styles.colTimeHeader}>İMSAK</Text><Text style={styles.colTimeHeader}>GÜNEŞ</Text><Text style={styles.colTimeHeader}>ÖĞLE</Text><Text style={styles.colTimeHeader}>İKND</Text><Text style={[styles.colTimeHeader, {fontWeight:'bold'}]}>İFTAR</Text><Text style={styles.colTimeHeader}>YATS</Text></View>;
+    if (item.type === 'month_header') return <View style={styles.monthHeaderContainer}><Text style={[styles.monthHeaderText, { color: theme.primary }]}>{item.title}</Text><View style={[styles.monthHeaderLine, { backgroundColor: theme.border }]} /></View>;
+    if (!item.timings) return null;
 
     const isToday = index === currentDayIndex;
-    const isKadirGecesi = item.date.hijri.month.number === 9 && item.date.hijri.day === '27';
-    
-    const engDayName = item.date.gregorian.weekday.en;
-    const engMonthName = item.date.gregorian.month.en;
-    const trDayName = TR_GUNLER[engDayName] || engDayName;
-    const trMonthName = TR_AYLAR[engMonthName] || engMonthName;
-
-    const engHijriMonth = item.date.hijri.month.en;
-    const trHijriMonth = TR_HICRI_AYLAR[engHijriMonth] || engHijriMonth;
-
-    const gregorianDate = `${item.date.gregorian.day} ${trMonthName}, ${trDayName}`;
-    const hijriDate = `${item.date.hijri.day} ${trHijriMonth} ${item.date.hijri.year}`;
-
     return (
-      <View style={[
-        styles.dayBlock, 
-        { backgroundColor: isDarkMode ? '#1C1C1E' : '#FFF', borderColor: isToday ? theme.primary : (isDarkMode ? '#2C2C2E' : '#E5E5EA') }
-      ]}>
-        <View style={styles.blockHeader}>
-           <Text style={[styles.gregorianText, { color: theme.text }]}>{gregorianDate}</Text>
-           <Text style={[styles.hijriText, { color: theme.subText }]}>{hijriDate}</Text>
-        </View>
-
-        <View style={styles.timeLabelsRow}>
-           <Text style={styles.timeLabel}>İmsak</Text>
-           <Text style={styles.timeLabel}>Güneş</Text>
-           <Text style={styles.timeLabel}>Öğle</Text>
-           <Text style={styles.timeLabel}>İkindi</Text>
-           <Text style={styles.timeLabel}>Akşam</Text>
-           <Text style={styles.timeLabel}>Yatsı</Text>
-        </View>
-
+      <View style={[styles.dayBlock, { backgroundColor: isDarkMode ? '#1C1C1E' : '#FFF', borderColor: isToday ? theme.primary : (isDarkMode ? '#2C2C2E' : '#E5E5EA') }]}>
+        <View style={styles.blockHeader}><Text style={[styles.gregorianText, { color: theme.text }]}>{`${item.date.gregorian.day} ${TR_AYLAR[item.date.gregorian.month.en] || item.date.gregorian.month.en}, ${TR_GUNLER[item.date.gregorian.weekday.en] || item.date.gregorian.weekday.en}`}</Text><Text style={[styles.hijriText, { color: theme.subText }]}>{`${item.date.hijri.day} ${TR_HICRI_AYLAR[item.date.hijri.month.en] || item.date.hijri.month.en}`}</Text></View>
         <View style={styles.timesRow}>
-           <Text style={[styles.timeValue, { color: theme.text }]}>{item.timings.Fajr.split(' ')[0]}</Text>
-           <Text style={[styles.timeValue, { color: theme.text }]}>{item.timings.Sunrise.split(' ')[0]}</Text>
-           <Text style={[styles.timeValue, { color: theme.text }]}>{item.timings.Dhuhr.split(' ')[0]}</Text>
-           <Text style={[styles.timeValue, { color: theme.text }]}>{item.timings.Asr.split(' ')[0]}</Text>
-           <Text style={[styles.timeValue, { color: theme.primary, fontWeight: 'bold' }]}>{item.timings.Maghrib.split(' ')[0]}</Text>
-           <Text style={[styles.timeValue, { color: theme.text }]}>{item.timings.Isha.split(' ')[0]}</Text>
+            {['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map((v, i) => (
+                <View key={i} style={{flex:1, alignItems:'center'}}>
+                    <Text style={styles.timeLabel}>{['İmsak','Güneş','Öğle','İkindi','İftar','Yatsı'][i]}</Text>
+                    <Text style={[styles.timeValue, { color: i === 4 ? theme.primary : theme.text, fontWeight: i === 4 ? 'bold' : '500' }]}>{item.timings[v].split(' ')[0]}</Text>
+                </View>
+            ))}
         </View>
-
         {isToday && <View style={[styles.todayIndicator, { backgroundColor: theme.primary }]} />}
-        {isKadirGecesi && <Star size={16} color="#FFD700" fill="#FFD700" style={styles.starIcon} />}
       </View>
     );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background, paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 }]}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={26} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: theme.text }]}>İmsakiye</Text>
-        <View style={{width: 26}} /> 
-      </View>
-
-      {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>
-      ) : (
+      <View style={styles.topBar}><TouchableOpacity onPress={() => navigation.goBack()}><ArrowLeft size={26} color={theme.text} /></TouchableOpacity><Text style={[styles.pageTitle, { color: theme.text }]}>İmsakiye</Text><View style={{width: 26}} /></View>
+      {loading ? <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View> : 
         <FlatList
           ref={flatListRef}
           data={imsakiyeData}
           keyExtractor={(item, index) => index.toString()}
           renderItem={renderItem}
-          ListHeaderComponent={renderHeader}
-          stickyHeaderIndices={[0]} 
-          contentContainerStyle={styles.listContent}
-          onScrollToIndexFailed={info => {
-            flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
-          }}
+          ListHeaderComponent={() => (
+            <View style={styles.headerCardWrapper}>
+              <View style={[styles.timerCard, { backgroundColor: theme.primary }]}>
+                <View style={styles.cardTopRow}>
+                    <View style={styles.badgeContainer}><MapPin size={12} color="#FFF" /><Text style={styles.badgeText}>{city}</Text></View>
+                    <View style={styles.badgeContainer}><Moon size={10} color="#FFF" /><Text style={styles.badgeText}>{hijriDateStr}</Text></View>
+                </View>
+                <View style={styles.timerMain}><Text style={styles.timerLabel}>{nextVakitName}</Text><Text style={styles.timerValue}>{countdown}</Text></View>
+                <Calendar size={120} color="rgba(255,255,255,0.08)" style={styles.bgIcon} />
+              </View>
+            </View>
+          )}
+          // CRASH ÖNLEYİCİ AYARLAR
+          getItemLayout={(data, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
+          initialNumToRender={10}
+          windowSize={5}
+          contentContainerStyle={{ paddingBottom: 40 }}
         />
-      )}
+      }
     </SafeAreaView>
   );
 }
@@ -388,57 +237,29 @@ export default function ImsakiyeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
-  pageTitle: { fontSize: 22, fontWeight: '800' },
+  pageTitle: { fontSize: 20, fontWeight: '800' },
   center: { flex: 1, justifyContent: 'center' },
-  listContent: { paddingBottom: 40 },
-
   headerCardWrapper: { paddingHorizontal: 16, marginBottom: 10 },
-  timerCard: { 
-    padding: 16, borderRadius: 24, overflow: 'hidden', height: 160, 
-    justifyContent: 'space-between', elevation: 8 
-  },
-  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', zIndex: 2 },
-  
-  badgeContainer: { 
-    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', 
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, maxWidth: '48%' 
-  },
-  badgeText: { color: '#FFF', fontSize: 12, fontWeight: '700' }, 
-
-  timerMain: { alignItems: 'center', justifyContent: 'center', flex: 1, zIndex: 2, paddingBottom: 10 },
-  timerLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 5 },
-  timerValue: { color: '#FFF', fontSize: 42, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.1)', textShadowOffset: {width:0, height:2}, textShadowRadius: 4, fontVariant: ['tabular-nums'] }, 
-  
-  bgIcon: { position: 'absolute', right: -20, bottom: -20, opacity: 0.1 },
-
-  monthHeaderContainer: { 
-    paddingHorizontal: 20, paddingVertical: 15, flexDirection: 'row', alignItems: 'center' 
-  },
-  monthHeaderText: { fontSize: 18, fontWeight: '800', marginRight: 10 },
-  monthHeaderLine: { flex: 1, height: 1, opacity: 0.5 },
-
-  tableHeader: { 
-    flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 16, 
-    borderBottomWidth: 1, elevation: 2, zIndex: 100, 
-    alignItems: 'center', marginHorizontal: 16, borderRadius: 12, marginBottom: 5
-  },
-  colDateHeader: { width: '14%', textAlign: 'center', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  colTimeHeader: { flex: 1, textAlign: 'center', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-
-  dayBlock: { 
-    marginHorizontal: 16, marginVertical: 6, padding: 16, borderRadius: 20, 
-    borderWidth: 1, elevation: 2, position: 'relative', overflow: 'hidden'
-  },
-  blockHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15, alignItems: 'center' },
-  gregorianText: { fontSize: 15, fontWeight: '700' },
-  hijriText: { fontSize: 13, fontWeight: '600' },
-  
-  timeLabelsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  timeLabel: { flex: 1, textAlign: 'center', fontSize: 11, color: '#8E8E93', fontWeight: '600' },
-  
+  timerCard: { padding: 16, borderRadius: 24, height: 160, justifyContent: 'space-between', overflow:'hidden' },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  badgeContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  badgeText: { color: '#FFF', fontSize: 11, fontWeight: '700', marginLeft: 4 },
+  timerMain: { alignItems: 'center', flex: 1, justifyContent: 'center' },
+  timerLabel: { color: '#FFF', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  timerValue: { color: '#FFF', fontSize: 38, fontWeight: '900' },
+  bgIcon: { position: 'absolute', right: -20, bottom: -20 },
+  tableHeader: { flexDirection: 'row', padding: 12, marginHorizontal: 16, borderRadius: 10, marginBottom: 5 },
+  colDateHeader: { width: '20%', fontSize: 9, fontWeight: '800', opacity: 0.5 },
+  colTimeHeader: { flex: 1, textAlign: 'center', fontSize: 9, fontWeight: '800', opacity: 0.5 },
+  monthHeaderContainer: { padding: 20, flexDirection: 'row', alignItems: 'center' },
+  monthHeaderText: { fontSize: 16, fontWeight: '800', marginRight: 10 },
+  monthHeaderLine: { flex: 1, height: 1 },
+  dayBlock: { marginHorizontal: 16, marginVertical: 6, padding: 15, borderRadius: 18, borderWidth: 1, height: 150 },
+  blockHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  gregorianText: { fontSize: 14, fontWeight: '700' },
+  hijriText: { fontSize: 12 },
   timesRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  timeValue: { flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '600' },
-
-  todayIndicator: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 5 },
-  starIcon: { position: 'absolute', top: 10, right: 10 },
+  timeLabel: { fontSize: 10, color: '#8E8E93', marginBottom: 4 },
+  timeValue: { fontSize: 13 },
+  todayIndicator: { position: 'absolute', left: 0, top: 20, bottom: 20, width: 4, borderTopRightRadius: 4, borderBottomRightRadius: 4 }
 });

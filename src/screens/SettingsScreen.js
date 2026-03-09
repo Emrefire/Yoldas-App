@@ -88,7 +88,6 @@ export default function SettingsScreen() {
   const { theme, isDarkMode, toggleTheme } = useTheme();
   const navigation = useNavigation();
 
-  // 🔥 PREMIUM STATE
   const [isPremium, setIsPremium] = useState(false);
 
   const [notifyOnTime, setNotifyOnTime] = useState(true);
@@ -125,11 +124,9 @@ export default function SettingsScreen() {
         const savedNotifyOnTime = await AsyncStorage.getItem('notifyOnTime');
         const savedNotifyPreAlerts = await AsyncStorage.getItem('notifyPreAlerts');
         const savedSound = await AsyncStorage.getItem('userNotificationSound');
-        
-        // Premium kontrolü
         const premiumStatus = await AsyncStorage.getItem('isPremiumUser');
+        
         if (premiumStatus === 'true') setIsPremium(true);
-
         if (savedCity) setSelectedCity(savedCity);
         if (savedAutoLoc !== null) setUseAutoLocation(JSON.parse(savedAutoLoc));
         if (savedNotifyOnTime !== null) setNotifyOnTime(JSON.parse(savedNotifyOnTime));
@@ -213,7 +210,6 @@ export default function SettingsScreen() {
     }
   };
 
-  // 🔥 YENİ: PREMIUM (REKLAM KALDIRMA) SİMÜLASYONU
   const handleRemoveAds = async () => {
       if (hapticEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
@@ -231,14 +227,6 @@ export default function SettingsScreen() {
                 text: "Satın Al (Test)", 
                 style: "default",
                 onPress: async () => {
-                    // V1.1'de buraya gerçek ödeme kodları (RevenueCat) gelecek:
-                    // try {
-                    //    const package = await Purchases.getOfferings();
-                    //    await Purchases.purchasePackage(package.current.availablePackages[0]);
-                    //    setIsPremium(true);
-                    // } catch (e) { ... }
-
-                    // Şimdilik yerel olarak Premium yapıyoruz (Simülasyon)
                     setIsPremium(true);
                     await AsyncStorage.setItem('isPremiumUser', 'true');
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -259,7 +247,7 @@ export default function SettingsScreen() {
       { text: "Vazgeç", style: "cancel" }, 
       { text: "Sıfırla", style: "destructive", onPress: async () => { 
           await AsyncStorage.clear(); 
-          setIsPremium(false); // Resetlenince Premium'u da geri al
+          setIsPremium(false); 
           await Notifications.cancelAllScheduledNotificationsAsync(); 
           Alert.alert("Başarılı", "Sıfırlandı."); 
       }} 
@@ -271,8 +259,9 @@ export default function SettingsScreen() {
       setIsSendingFeedback(true); 
 
       try { 
+          // Timeout süresini 10 saniyeye çıkardık
           const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("ZamanAşımı")), 8000)
+              setTimeout(() => reject(new Error("ZamanAşımı")), 10000)
           );
 
           const firebasePromise = addDoc(collection(db, "feedbacks"), { 
@@ -291,10 +280,11 @@ export default function SettingsScreen() {
           setTimeout(() => { Alert.alert("Teşekkürler!", "Geri bildiriminiz alındı."); }, 500); 
 
       } catch (error) { 
+          console.error("Firebase Gönderim Hatası:", error); 
           if (error.message === "ZamanAşımı") {
-             Alert.alert("Bağlantı Hatası", "İnternet bağlantınızı kontrol edip tekrar deneyin.");
+             Alert.alert("Bağlantı Hatası", "İnternet bağlantınızı kontrol edip tekrar deneyin. (Not: Emülatörlerde ağ kısıtlaması olabilir, gerçek cihazda test ediniz).");
           } else {
-             Alert.alert("Hata", "Beklenmeyen bir hata oluştu.");
+             Alert.alert("Hata", "Beklenmeyen bir hata oluştu: " + error.message);
           }
       } finally { 
           setIsSendingFeedback(false); 
@@ -312,7 +302,6 @@ export default function SettingsScreen() {
            <Text style={[styles.pageSubtitle, { color: theme.subText }]}>Uygulamanı kişiselleştir</Text>
         </View>
 
-        {/* 🔥 PREMIUM BÖLÜMÜ GÜNCELLENDİ */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: isPremium ? '#FFD700' : theme.primary }]}>PREMIUM</Text>
           <View style={[styles.menuBox, { backgroundColor: theme.card, shadowColor: theme.text, borderColor: isPremium ? '#FFD700' : theme.primary, borderWidth: 1 }]}>

@@ -9,6 +9,12 @@ import { Audio } from 'expo-av';
 import { useTheme } from '../context/ThemeContext'; 
 import { useNavigation } from '@react-navigation/native';
 
+// 🔥 REKLAM KÜTÜPHANESİ EKLENDİ
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+
+// 💡 Canlıya çıkarken kendi Banner ID'ni buraya yazacaksın.
+const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy'; 
+
 const { width, height } = Dimensions.get('window');
 const CIRCLE_SIZE = Math.min(width * 0.72, 300);
 
@@ -83,6 +89,17 @@ export default function ZikirScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 25) + 10 : 0 }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       
+      {/* 🔥 REKLAM ALANI (Yanlış tıklanmaması için en üste, güvenli bölgeye sabitlendi) */}
+      <View style={[styles.adContainer, { backgroundColor: theme.background }]}>
+        <BannerAd
+          unitId={adUnitId}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{
+            requestNonPersonalizedAdsOnly: true,
+          }}
+        />
+      </View>
+
       <ScrollView 
         contentContainerStyle={styles.scrollContent} 
         showsVerticalScrollIndicator={false}
@@ -188,6 +205,17 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { paddingHorizontal: 20 },
   
+  // 🔥 REKLAM ALANI STİLİ
+  adContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+    zIndex: 10
+  },
+
   headerContainer: { alignItems: 'center', marginTop: 15 },
   headerTitle: { fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   headerSubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center', opacity: 0.7, fontWeight: '500' },

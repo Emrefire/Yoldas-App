@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, 
   TouchableOpacity, Switch, Alert, ScrollView, Platform, Share, Modal, 
-  TextInput, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, FlatList, ActivityIndicator, Dimensions, StatusBar 
+  TextInput, TouchableWithoutFeedback, FlatList, Dimensions, StatusBar, Linking 
 } from 'react-native';
 import { 
   Bell, MapPin, Moon, Sun, Shield, Trash2, 
-  ChevronRight, Share2, Star, Vibrate, X, Navigation, Search, Check, Volume2, PlayCircle, StopCircle, Crown 
+  ChevronRight, Share2, Star, Vibrate, X, Navigation, Search, Check, Volume2, PlayCircle, StopCircle 
 } from 'lucide-react-native'; 
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
@@ -14,10 +14,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av'; 
-
 import { useTheme } from '../context/ThemeContext'; 
-import { collection, addDoc } from 'firebase/firestore'; 
-import { db } from '../components/firebaseConfig'; 
 
 const { width } = Dimensions.get('window');
 
@@ -42,14 +39,14 @@ const SOUND_OPTIONS = [
 ];
 
 const SOUND_FILES = {
-  'ney': require('../../assets/sounds/ney.wav'),
-  'kus-civiltisi': require('../../assets/sounds/kuscivilti.wav'),
-  'ruzgar-cani': require('../../assets/sounds/ruzgarcan.wav'),
-  'tibetan-bowl': require('../../assets/sounds/thunderbowl.wav'),
-  'klasik': require('../../assets/sounds/arabicsounds.wav')
+  'ney': require('../../assets/sounds/ney.mp3'),
+  'kus-civiltisi': require('../../assets/sounds/kuscivilti.mp3'),
+  'ruzgar-cani': require('../../assets/sounds/ruzgarcan.mp3'),
+  'tibetan-bowl': require('../../assets/sounds/thunderbowl.mp3'),
+  'klasik': require('../../assets/sounds/arabicsounds.mp3')
 };
 
-const SettingItem = ({ icon: Icon, color, title, subtitle, isSwitch, value, onToggle, isDestructive, hasArrow, onPress, theme, isDarkMode, disabled, isPremiumBadge }) => (
+const SettingItem = ({ icon: Icon, color, title, subtitle, isSwitch, value, onToggle, isDestructive, hasArrow, onPress, theme, isDarkMode, disabled }) => (
   <TouchableOpacity 
     style={[styles.menuItem, { borderBottomColor: theme.border, opacity: disabled ? 0.5 : 1 }]} 
     onPress={isSwitch ? () => !disabled && onToggle(!value) : disabled ? null : onPress}
@@ -58,8 +55,8 @@ const SettingItem = ({ icon: Icon, color, title, subtitle, isSwitch, value, onTo
     disabled={disabled && !isSwitch}
   >
     <View style={styles.menuLeft}>
-      <View style={[styles.iconBox, { backgroundColor: isPremiumBadge ? '#FFD70020' : (isDestructive ? '#FFEBEE' : (isDarkMode ? '#2C2C2E' : color + '15')) }]}>
-        {Icon && <Icon size={22} color={isPremiumBadge ? '#FFD700' : (isDestructive ? '#FF3B30' : color)} />}
+      <View style={[styles.iconBox, { backgroundColor: isDestructive ? '#FFEBEE' : (isDarkMode ? '#2C2C2E' : color + '15') }]}>
+        {Icon && <Icon size={22} color={isDestructive ? '#FF3B30' : color} />}
       </View>
       <View style={{marginLeft: 14, flex: 1}}>
         <Text style={[styles.menuText, { color: isDestructive ? '#FF3B30' : theme.text }]}>{title}</Text>
@@ -88,8 +85,6 @@ export default function SettingsScreen() {
   const { theme, isDarkMode, toggleTheme } = useTheme();
   const navigation = useNavigation();
 
-  const [isPremium, setIsPremium] = useState(false);
-
   const [notifyOnTime, setNotifyOnTime] = useState(true);
   const [notifyPreAlerts, setNotifyPreAlerts] = useState(true);
   const [selectedSound, setSelectedSound] = useState('default');
@@ -99,15 +94,10 @@ export default function SettingsScreen() {
   const [detectedLocationText, setDetectedLocationText] = useState("Konum alınıyor..."); 
   const [hapticEnabled, setHapticEnabled] = useState(true);
 
-  const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [cityModalVisible, setCityModalVisible] = useState(false);
   const [soundModalVisible, setSoundModalVisible] = useState(false);
-  
-  const [userRating, setUserRating] = useState(0);
-  const [userComment, setUserComment] = useState("");
-  const [isSendingFeedback, setIsSendingFeedback] = useState(false); 
   const [citySearch, setCitySearch] = useState("");
-  
+
   const [soundObj, setSoundObj] = useState(null);
   const [playingSoundId, setPlayingSoundId] = useState(null); 
 
@@ -124,14 +114,14 @@ export default function SettingsScreen() {
         const savedNotifyOnTime = await AsyncStorage.getItem('notifyOnTime');
         const savedNotifyPreAlerts = await AsyncStorage.getItem('notifyPreAlerts');
         const savedSound = await AsyncStorage.getItem('userNotificationSound');
-        const premiumStatus = await AsyncStorage.getItem('isPremiumUser');
+        const savedHaptic = await AsyncStorage.getItem('hapticEnabled');
         
-        if (premiumStatus === 'true') setIsPremium(true);
         if (savedCity) setSelectedCity(savedCity);
         if (savedAutoLoc !== null) setUseAutoLocation(JSON.parse(savedAutoLoc));
         if (savedNotifyOnTime !== null) setNotifyOnTime(JSON.parse(savedNotifyOnTime));
         if (savedNotifyPreAlerts !== null) setNotifyPreAlerts(JSON.parse(savedNotifyPreAlerts));
         if (savedSound) setSelectedSound(savedSound);
+        if (savedHaptic !== null) setHapticEnabled(savedHaptic === 'true');
     } catch (e) { console.log("Ayarlar yüklenemedi", e); }
   };
 
@@ -139,7 +129,12 @@ export default function SettingsScreen() {
     try {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') { setDetectedLocationText("İzin verilmedi"); return; }
-        let loc = await Location.getCurrentPositionAsync({});
+        
+        let loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced, 
+            mayShowUserSettingsDialog: true
+        });
+        
         let reverseGeocode = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
         if (reverseGeocode.length > 0) {
             const place = reverseGeocode[0];
@@ -210,85 +205,71 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleRemoveAds = async () => {
-      if (hapticEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      if (isPremium) {
-          Alert.alert("Zaten Premium'sunuz 👑", "Reklamlar zaten kaldırıldı. Desteğiniz için teşekkür ederiz!");
-          return;
-      }
-
-      Alert.alert(
-          "Reklamları Kaldır",
-          "Uygulamadaki tüm reklamları kalıcı olarak kaldırmak ve bize destek olmak ister misiniz? (Şu an test modundasınız)",
-          [
-              { text: "Vazgeç", style: "cancel" },
-              { 
-                text: "Satın Al (Test)", 
-                style: "default",
-                onPress: async () => {
-                    setIsPremium(true);
-                    await AsyncStorage.setItem('isPremiumUser', 'true');
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    Alert.alert("Tebrikler! 🎉", "Premium sürüme geçtiniz. Artık reklam görmeyeceksiniz.");
-                }
-              }
-          ]
-      );
-  };
-
   const toggleAutoLocation = async (val) => { setUseAutoLocation(val); await AsyncStorage.setItem('useAutoLocation', JSON.stringify(val)); if (val) getCurrentLocationName(); if (hapticEnabled) Haptics.selectionAsync(); };
-  const selectCity = async (city) => { setSelectedCity(city); await AsyncStorage.setItem('userCity', city); setUseAutoLocation(false); await AsyncStorage.setItem('useAutoLocation', JSON.stringify(false)); await Notifications.cancelAllScheduledNotificationsAsync(); setCityModalVisible(false); if (hapticEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); Alert.alert("Konum Değişti", `${city} olarak ayarlandı.`); };
-  const toggleHaptic = (val) => { setHapticEnabled(val); if (val) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
+  
+  const selectCity = async (city) => { 
+      setSelectedCity(city); 
+      await AsyncStorage.setItem('userCity', city); 
+      setUseAutoLocation(false); 
+      await AsyncStorage.setItem('useAutoLocation', JSON.stringify(false)); 
+      await Notifications.cancelAllScheduledNotificationsAsync(); 
+      setCityModalVisible(false); 
+      if (hapticEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); 
+      Alert.alert("Konum Değişti", `${city} olarak ayarlandı.`); 
+  };
+  
+  const toggleHaptic = async (val) => { 
+    setHapticEnabled(val); 
+    if (val) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); 
+    try {
+      await AsyncStorage.setItem('hapticEnabled', val.toString());
+    } catch (error) {
+      console.log("Ayar kaydetme hatası:", error);
+    }
+  };
   
   const handleResetData = () => { 
     if (hapticEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); 
-    Alert.alert("Verileri Sıfırla", "Tüm ayarlar (Premium dahil) sıfırlanacak. Emin misiniz?", [
+    Alert.alert("Verileri Sıfırla", "Tüm ayarlar sıfırlanacak. Emin misiniz?", [
       { text: "Vazgeç", style: "cancel" }, 
       { text: "Sıfırla", style: "destructive", onPress: async () => { 
           await AsyncStorage.clear(); 
-          setIsPremium(false); 
           await Notifications.cancelAllScheduledNotificationsAsync(); 
           Alert.alert("Başarılı", "Sıfırlandı."); 
       }} 
     ]); 
   };
   
-  const submitRating = async () => { 
-      if (userRating === 0) return; 
-      setIsSendingFeedback(true); 
-
-      try { 
-          // Timeout süresini 10 saniyeye çıkardık
-          const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("ZamanAşımı")), 10000)
-          );
-
-          const firebasePromise = addDoc(collection(db, "feedbacks"), { 
-              rating: userRating, 
-              comment: userComment, 
-              createdAt: new Date(), 
-              platform: Platform.OS 
-          });
-
-          await Promise.race([firebasePromise, timeoutPromise]);
-
-          if (hapticEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); 
-          setRatingModalVisible(false); 
-          setUserRating(0); 
-          setUserComment(""); 
-          setTimeout(() => { Alert.alert("Teşekkürler!", "Geri bildiriminiz alındı."); }, 500); 
-
-      } catch (error) { 
-          console.error("Firebase Gönderim Hatası:", error); 
-          if (error.message === "ZamanAşımı") {
-             Alert.alert("Bağlantı Hatası", "İnternet bağlantınızı kontrol edip tekrar deneyin. (Not: Emülatörlerde ağ kısıtlaması olabilir, gerçek cihazda test ediniz).");
-          } else {
-             Alert.alert("Hata", "Beklenmeyen bir hata oluştu: " + error.message);
-          }
-      } finally { 
-          setIsSendingFeedback(false); 
-      } 
+  const openAppStoreRating = () => {
+      if (hapticEnabled) Haptics.selectionAsync();
+      
+      const androidPackageName = 'com.emre.yoldas'; // Buraya kendi Google Play paket adını yazmalısın
+      
+      Alert.alert(
+          "Bizi Değerlendirin ⭐",
+          "Uygulamamızı beğendiniz mi? Bize mağazada puan vererek destek olabilirsiniz!",
+          [
+              { text: "Daha Sonra", style: "cancel" },
+              { 
+                  text: "Değerlendir", 
+                  style: "default",
+                  onPress: () => {
+                      // Sadece Android Google Play bağlantısı
+                      Linking.openURL(`market://details?id=${androidPackageName}`)
+                      .catch(() => Linking.openURL(`https://play.google.com/store/apps/details?id=${androidPackageName}`));
+                  }
+              }
+          ]
+      );
+  };
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: 'Sana manevi yolculuğunda eşlik edecek harika bir uygulama buldum: Yoldaş! Hemen indir: https://play.google.com/store/apps/details?id=com.emre.yoldas',
+      });
+    } catch (error) {
+      console.log('Paylaşım hatası:', error);
+    }
   };
 
   const filteredCities = TURKEY_CITIES.filter(city => city.toLowerCase().includes(citySearch.toLowerCase()));
@@ -303,27 +284,10 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: isPremium ? '#FFD700' : theme.primary }]}>PREMIUM</Text>
-          <View style={[styles.menuBox, { backgroundColor: theme.card, shadowColor: theme.text, borderColor: isPremium ? '#FFD700' : theme.primary, borderWidth: 1 }]}>
-            <SettingItem 
-                icon={Crown} 
-                color="#FFD700" 
-                title={isPremium ? "Premium Aktif 👑" : "Reklamları Kaldır"} 
-                subtitle={isPremium ? "Desteğin için teşekkürler!" : "Daha saf ve odaklanmış bir deneyim"} 
-                hasArrow={!isPremium} 
-                onPress={handleRemoveAds} 
-                theme={theme} 
-                isDarkMode={isDarkMode} 
-                isPremiumBadge={true}
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.subText }]}>BİLDİRİM & SESLER</Text>
           <View style={[styles.menuBox, { backgroundColor: theme.card, shadowColor: theme.text }]}>
             <SettingItem icon={Bell} color="#FF9500" title="Vakit Bildirimleri" subtitle="Ezan vaktinde bildirim al" isSwitch value={notifyOnTime} onToggle={toggleNotifyOnTime} theme={theme} isDarkMode={isDarkMode} />
-            <SettingItem icon={Bell} color="#FFCC00" title="45 Dakika Kala" subtitle="İftar ve Sahur öncesi Yoldaş uyarısı" isSwitch value={notifyPreAlerts} onToggle={toggleNotifyPreAlerts} theme={theme} isDarkMode={isDarkMode} />
+            <SettingItem icon={Bell} color="#FFCC00" title="45 Dakika Kala" subtitle="Öncesinde Yoldaş uyarısı" isSwitch value={notifyPreAlerts} onToggle={toggleNotifyPreAlerts} theme={theme} isDarkMode={isDarkMode} />
             <SettingItem icon={Volume2} color="#5856D6" title="Bildirim Sesi" subtitle={SOUND_OPTIONS.find(s => s.id === selectedSound)?.label} hasArrow onPress={() => setSoundModalVisible(true)} theme={theme} isDarkMode={isDarkMode} />
           </View>
         </View>
@@ -347,8 +311,8 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.subText }]}>GENEL</Text>
           <View style={[styles.menuBox, { backgroundColor: theme.card, shadowColor: theme.text }]}>
-            <SettingItem icon={Share2} color="#007AFF" title="Paylaş" hasArrow onPress={() => Share.share({message: 'Yoldaş uygulamasını indir!'})} theme={theme} isDarkMode={isDarkMode}/>
-            <SettingItem icon={Star} color="#FFD60A" title="Bizi Değerlendir" hasArrow onPress={() => setRatingModalVisible(true)} theme={theme} isDarkMode={isDarkMode}/>
+            <SettingItem icon={Share2} color="#007AFF" title="Paylaş" hasArrow onPress={handleShare} theme={theme} isDarkMode={isDarkMode}/>
+            <SettingItem icon={Star} color="#FFD60A" title="Bizi Değerlendir" hasArrow onPress={openAppStoreRating} theme={theme} isDarkMode={isDarkMode}/>
             <SettingItem icon={Shield} color="#5856D6" title="Gizlilik Politikası" hasArrow onPress={() => navigation.navigate('PrivacyPolicy')} theme={theme} isDarkMode={isDarkMode}/>
             <SettingItem icon={Trash2} color="#FF3B30" title="Verileri Sıfırla" isDestructive onPress={handleResetData} theme={theme} isDarkMode={isDarkMode}/>
           </View>
@@ -417,25 +381,6 @@ export default function SettingsScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* --- DEĞERLENDİRME MODALI --- */}
-      <Modal animationType="fade" transparent={true} visible={ratingModalVisible} onRequestClose={() => setRatingModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{flex: 1}}>
-            <TouchableWithoutFeedback onPress={() => setRatingModalVisible(false)}>
-                <View style={styles.modalOverlay}>
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
-                            <View style={styles.modalHandle} />
-                            <Text style={[styles.modalTitleCenter, {color: theme.text}]}>Uygulamayı Değerlendir</Text>
-                            <View style={styles.starsContainer}>{[1, 2, 3, 4, 5].map((star) => (<TouchableOpacity key={star} onPress={() => setUserRating(star)} style={{ padding: 8 }}><Star size={36} color="#FFD60A" fill={userRating >= star ? "#FFD60A" : "transparent"} /></TouchableOpacity>))}</View>
-                            <TextInput style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]} placeholder="Düşüncelerinizi yazın..." placeholderTextColor={theme.subText} multiline numberOfLines={3} value={userComment} onChangeText={setUserComment} />
-                            <TouchableOpacity style={[styles.submitButton, { backgroundColor: theme.primary, opacity: (userRating === 0 || isSendingFeedback) ? 0.6 : 1 }]} onPress={submitRating} disabled={userRating === 0 || isSendingFeedback}>{isSendingFeedback ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitButtonText}>Gönder</Text>}</TouchableOpacity>
-                        </View>
-                    </TouchableWithoutFeedback>
-                </View>
-            </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </Modal>
-
     </SafeAreaView>
   );
 }
@@ -464,10 +409,6 @@ const styles = StyleSheet.create({
   modalHeaderFull: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 10 },
   modalTitle: { fontSize: 20, fontWeight: 'bold' },
   closeBtn: { padding: 5 },
-  starsContainer: { flexDirection: 'row', justifyContent: 'center', marginBottom: 25 },
-  input: { height: 100, borderWidth: 1, borderRadius: 16, padding: 15, textAlignVertical: 'top', fontSize: 16, marginBottom: 25 },
-  submitButton: { padding: 18, borderRadius: 18, alignItems: 'center' },
-  submitButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   searchBar: { flexDirection: 'row', alignItems: 'center', margin: 20, marginTop: 0, padding: 14, borderRadius: 16 },
   searchInput: { marginLeft: 12, flex: 1, fontSize: 16 },
   cityItem: { paddingVertical: 18, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between' },

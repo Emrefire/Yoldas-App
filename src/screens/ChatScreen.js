@@ -2,24 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, TextInput, 
   TouchableOpacity, FlatList, KeyboardAvoidingView, 
-  Platform, Keyboard, Animated, Image, StatusBar, Alert 
+  Platform, Keyboard, Animated, Image, StatusBar, Alert, Modal
 } from 'react-native';
-// 🔥 DEĞİŞİKLİK: Square ikonunu ekledik
-import { Send, ArrowLeft, Sparkles, Mic, Square } from 'lucide-react-native';
+import { Send, ArrowLeft, Trash2, Square, Plus, Menu, MessageSquare, X } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; 
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import functions from '@react-native-firebase/functions';
 
-const YOLDAS_AVATAR = require('../../assets/yoldasavatar.png');
+const YOLDAS_AVATAR = require('../../assets/yoldasavatar.webp');
+const CHAT_SESSIONS_KEY = 'yoldas_chat_sessions_v1'; 
 
 const WELCOME_MESSAGES = [
   "Selamün Aleyküm cancağızım! 👋\n\nBen Yoldaş. Manevi konularda hasbihal etmek, dertleşmek veya bilgi almak istersen buradayım. 🌿",
 ];
 
 const renderFormattedText = (text, theme, isUser) => {
+  if (!text) return null; 
+
   if (isUser) {
     return <Text style={[styles.messageText, { color: '#FFF' }]}>{text}</Text>;
   }
@@ -47,6 +49,11 @@ const TypewriterMessage = ({ text, theme, onComplete }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
+    if (!text) {
+      if (onComplete) onComplete();
+      return;
+    }
+    
     if (currentIndex < text.length) {
       const timeout = setTimeout(() => {
         setDisplayedText(prev => prev + text[currentIndex]);
@@ -61,8 +68,11 @@ const TypewriterMessage = ({ text, theme, onComplete }) => {
   return renderFormattedText(displayedText, theme, false);
 };
 
+// 🔥 PROFESYONEL DİNAMİK BEKLEME ANİMASYONU
 const TypingIndicator = ({ theme }) => {
   const [dots] = useState([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]);
+  const [statusText, setStatusText] = useState("Yoldaş düşünüyor...");
+
   useEffect(() => {
     const anim = dots.map((dot, i) => 
       Animated.loop(
@@ -74,40 +84,94 @@ const TypingIndicator = ({ theme }) => {
       )
     );
     anim.forEach(a => a.start());
-    return () => anim.forEach(a => a.stop());
+
+    // Bekleme hissini azaltmak için her 4 saniyede bir yazıyı değiştiriyoruz
+    const texts = [
+      "Yoldaş düşünüyor...",
+      "Kaynaklar taranıyor...",
+      "Cevap derleniyor...",
+      "Az kaldı cancağızım..."
+    ];
+    let step = 0;
+    const textInterval = setInterval(() => {
+      step = (step + 1) % texts.length;
+      setStatusText(texts[step]);
+    }, 4000);
+
+    return () => {
+      anim.forEach(a => a.stop());
+      clearInterval(textInterval);
+    };
   }, []);
 
   return (
-    <View style={[styles.typingBubble, { backgroundColor: theme.card }]}>
-      <View style={styles.typingRow}>
-        {dots.map((dot, i) => <Animated.View key={i} style={[styles.dot, { backgroundColor: theme.subText, transform: [{ translateY: dot }] }]} />)}
+    <View style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+      <View style={[styles.typingBubble, { backgroundColor: theme.card }]}>
+        <View style={styles.typingRow}>
+          {dots.map((dot, i) => <Animated.View key={i} style={[styles.dot, { backgroundColor: theme.subText, transform: [{ translateY: dot }] }]} />)}
+        </View>
       </View>
+      <Text style={{ fontSize: 11, color: theme.subText, marginTop: 4, marginLeft: 5, fontStyle: 'italic' }}>
+        {statusText}
+      </Text>
     </View>
   );
 };
 
-function ChatContent() {
+export default function ChatScreen() {
   const navigation = useNavigation();
-  const route = useRoute();
+  const route = useRoute(); 
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets(); 
   
-  const [messages, setMessages] = useState([{ id: '1', text: WELCOME_MESSAGES[0], sender: 'bot', animate: false }]);
+  const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [inputLocked, setInputLocked] = useState(false);
   
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
   const flatListRef = useRef();
   const inputRef = useRef(); 
-  
-  // 🔥 DEĞİŞİKLİK: İşlemi iptal etmek için bir referans tutuyoruz
   const abortControllerRef = useRef(null);
 
   useEffect(() => {
-    if (route.params?.initialMessage) {
-      setInputText(route.params.initialMessage);
+    loadSessions();
+  }, []);
+
+  useEffect(() => {
+    if (activeSessionId && route.params?.initialMessage) {
+      const incomingMessage = route.params.initialMessage;
+      setInputText(incomingMessage);
+      navigation.setParams({ initialMessage: undefined });
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 300);
     }
-  }, [route.params?.initialMessage]);
+  }, [activeSessionId, route.params?.initialMessage]);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -116,28 +180,131 @@ function ChatContent() {
     return () => clearTimeout(timer);
   }, [messages.length]); 
 
-  const startListening = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert("Yakında", "Sesli sohbet özelliği çok yakında gelecek! 🎙️");
+  const loadSessions = async () => {
+    try {
+      const savedSessions = await AsyncStorage.getItem(CHAT_SESSIONS_KEY);
+      let parsedSessions = savedSessions ? JSON.parse(savedSessions) : [];
+
+      if (parsedSessions.length > 0) {
+        setSessions(parsedSessions);
+        const latestSession = parsedSessions[0];
+        setActiveSessionId(latestSession.id);
+        setMessages(latestSession.messages.map(m => ({...m, animate: false})));
+      } else {
+        createNewChat(); 
+      }
+    } catch (e) {
+      console.log("Oturumlar yüklenemedi", e);
+      createNewChat();
+    }
   };
 
-  // 🔥 DEĞİŞİKLİK: Durdurma butonu fonksiyonu
+  const createNewChat = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const newSessionId = Date.now().toString();
+    const initialMessages = [{ id: '1', text: WELCOME_MESSAGES[0], sender: 'bot', animate: false }];
+    
+    const newSession = {
+      id: newSessionId,
+      title: 'Yeni Sohbet',
+      updatedAt: Date.now(),
+      messages: initialMessages
+    };
+
+    setSessions(prev => {
+      const updated = [newSession, ...prev];
+      AsyncStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+
+    setActiveSessionId(newSessionId);
+    setMessages(initialMessages);
+    setMenuVisible(false);
+    setInputText('');
+  };
+
+  const switchSession = (sessionId) => {
+    Haptics.selectionAsync();
+    const sessionToLoad = sessions.find(s => s.id === sessionId);
+    if (sessionToLoad) {
+      setActiveSessionId(sessionId);
+      setMessages(sessionToLoad.messages.map(m => ({...m, animate: false})));
+      setMenuVisible(false);
+      setInputText('');
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      setLoading(false);
+      setInputLocked(false);
+    }
+  };
+
+  const deleteSession = (sessionId) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      "Sohbeti Sil",
+      "Bu sohbet geçmişini silmek istediğine emin misin?",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { 
+          text: "Sil", 
+          style: "destructive", 
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setSessions(prev => {
+              const updated = prev.filter(s => s.id !== sessionId);
+              AsyncStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(updated));
+              
+              if (sessionId === activeSessionId) {
+                if (updated.length > 0) {
+                  setActiveSessionId(updated[0].id);
+                  setMessages(updated[0].messages.map(m => ({...m, animate: false})));
+                } else {
+                  const newId = Date.now().toString();
+                  const initialMsg = [{ id: '1', text: WELCOME_MESSAGES[0], sender: 'bot', animate: false }];
+                  const newSes = { id: newId, title: 'Yeni Sohbet', updatedAt: Date.now(), messages: initialMsg };
+                  updated.push(newSes);
+                  AsyncStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(updated));
+                  setActiveSessionId(newId);
+                  setMessages(initialMsg);
+                }
+              }
+              return updated;
+            });
+          }
+        }
+      ]
+    );
+  };
+
+  const updateSessionData = (newMessages, userMessageText = null) => {
+    setSessions(prevSessions => {
+      let updatedSessions = [...prevSessions];
+      const sessionIndex = updatedSessions.findIndex(s => s.id === activeSessionId);
+      
+      if (sessionIndex > -1) {
+        updatedSessions[sessionIndex].messages = newMessages.slice(-50); 
+        updatedSessions[sessionIndex].updatedAt = Date.now();
+        
+        if (userMessageText && updatedSessions[sessionIndex].title === 'Yeni Sohbet') {
+          let newTitle = userMessageText.substring(0, 25);
+          if (userMessageText.length > 25) newTitle += '...';
+          updatedSessions[sessionIndex].title = newTitle;
+        }
+      }
+      
+      updatedSessions.sort((a, b) => b.updatedAt - a.updatedAt);
+      AsyncStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(updatedSessions));
+      return updatedSessions;
+    });
+  };
+
   const stopAction = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // 1. API'yi iptal et (eğer hala yükleniyorsa)
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    
-    // 2. Kilidi ve yükleme ikonunu kaldır
+    if (abortControllerRef.current) abortControllerRef.current.abort();
     setLoading(false);
     setInputLocked(false);
-    
-    // 3. Eğer halihazırda daktilo gibi yazıyorsa, animasyonu kesip tam metni göster
-    setMessages(prev => prev.map(msg => 
-      msg.animate ? { ...msg, animate: false } : msg
-    ));
+    const resolvedMessages = messages.map(msg => msg.animate ? { ...msg, animate: false } : msg);
+    setMessages(resolvedMessages);
+    updateSessionData(resolvedMessages);
   };
 
   const sendMessage = async (text) => {
@@ -150,63 +317,49 @@ function ChatContent() {
         return;
     }
 
-    setMessages(prev => [...prev, { id: Date.now().toString(), text: userText, sender: 'user' }]);
+    const userMsgObj = { id: Date.now().toString(), text: userText, sender: 'user' };
+    let updatedMessages = [...messages, userMsgObj];
+    setMessages(updatedMessages);
+    updateSessionData(updatedMessages, userText); 
+    
     setInputText('');
-    setLoading(true);
+    setLoading(true); 
     setInputLocked(true);
     Keyboard.dismiss();
 
-    // 🔥 DEĞİŞİKLİK: Yeni bir iptal denetleyicisi oluşturuyoruz
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
     try {
-      const askYoldas = functions().httpsCallable('askYoldas');
+      // 🔥 KRİTİK DÜZELTME: Süreyi 60 saniyeye çıkarttık! Erken kapanıp hata vermeyecek.
+      const askYoldas = functions().httpsCallable('askYoldas', { timeout: 60000 });
       
-      const securePrompt = `
-        GÖREVİN: Sen "Yoldaş" adında samimi, dindar, bilge ve güvenilir bir yapay zeka asistanısın.
-        
-        🛑 KIRMIZI ÇİZGİLER (ASLA İHLAL ETME):
-        1. KONU SINIRLAMASI: Sadece ve sadece **Dini (İslam), Manevi, Ahlaki, Tasavvufi konular ve Kişisel Dertleşme** hakkında konuşabilirsin.
-        2. YASAKLI KONULAR: Spor, Siyaset, Teknoloji, Kodlama, Matematik, Coğrafya, Magazin, Yemek Tarifi vb. dünya işleri sorulursa CEVAP VERME.
-        3. REDDETME MESAJI: Eğer kullanıcı yasaklı bir konu açarsa şu cümleyi kur: "Aziz dostum, ben sadece manevi konularda hasbihal etmek için tasarlandım. Gönül dünyana dair bir sorun varsa dinlerim."
-        
-        ✅ CEVAP TARZI:
-        - Uzunluk: Konuyu eksik bırakma ama gereksiz uzatma. Öz ve doyurucu olsun.
-        - Liste: Eğer namazın farzları gibi bir şey sorulursa maddeler halinde yaz. Listeleri numaralandır ve başlıklarını ** (yıldız) içine al.
-        - Üslup: "Cancağızım", "Aziz dostum", "Güzel kardeşim" gibi samimi hitaplar kullan.
-        
-        Kullanıcı Sorusu: ${userText}
-      `;
+      const result = await askYoldas({ message: userText });
 
-      const result = await askYoldas({ prompt: securePrompt });
-
-      // 🔥 DEĞİŞİKLİK: Kullanıcı durdur tuşuna bastıysa, gelen cevabı ekrana basma
       if (abortController.signal.aborted) return;
 
-      const botResponse = result.data.answer; 
-
-      setMessages(prev => [...prev, { 
-        id: (Date.now() + 1).toString(), 
-        text: botResponse, 
-        sender: 'bot', 
-        animate: true 
-      }]);
+      const botResponse = result?.data?.answer || "Sözcükleri toparlayamadım cancağızım, sorunu tekrar eder misin?"; 
+      
+      const botMsgObj = { id: (Date.now() + 1).toString(), text: botResponse, sender: 'bot', animate: true };
+      const finalMessages = [...updatedMessages, botMsgObj];
+      
+      setMessages(finalMessages);
+      updateSessionData(finalMessages); 
 
     } catch (e) {
-      // 🔥 DEĞİŞİKLİK: Kullanıcı iptal etti diye hata verdiyse bunu ekrana yansıtma
       if (abortController.signal.aborted) return;
       
-      console.error("Firebase Hatası:", e);
-      setMessages(prev => [...prev, { 
-        id: 'err', 
-        text: "😔 Bağlantıda bir sorun oldu cancağızım. Birazdan tekrar dener misin?", 
-        sender: 'bot' 
-      }]);
+      console.log("Sistem Hatası:", e);
+      // Hata mesajını biraz daha samimi ve anlaşılır yaptık
+      const errMsgObj = { id: 'err_' + Date.now(), text: "😔 Şu an uzak diyarlara dalmışım cancağızım, bağlantım koptu. Sorunu tekrar eder misin?", sender: 'bot' };
+      const errMessages = [...updatedMessages, errMsgObj];
+      
+      setMessages(errMessages);
+      updateSessionData(errMessages);
     } finally {
-      // Sadece bu istek iptal edilmediyse kilidi aç (çünkü iptal edildiyse stopAction açtı zaten)
       if (!abortController.signal.aborted) {
         setLoading(false);
+        setInputLocked(false);
       }
     }
   };
@@ -230,7 +383,6 @@ function ChatContent() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 0 }]}>
       
-      {/* HEADER */}
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <View style={{flexDirection: 'row', alignItems: 'center'}}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}><ArrowLeft size={24} color={theme.text} /></TouchableOpacity>
@@ -240,7 +392,15 @@ function ChatContent() {
             <View style={styles.onlineRow}><View style={styles.onlineDot} /><Text style={[styles.onlineText, { color: theme.primary }]}>Çevrimiçi</Text></View>
           </View>
         </View>
-        <Sparkles size={22} color={theme.primary} fill={theme.primary + '20'} />
+        
+        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+          <TouchableOpacity onPress={createNewChat} style={{padding: 8, marginRight: 5}}>
+             <Plus size={24} color={theme.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setMenuVisible(true)} style={{padding: 8}}>
+             <Menu size={24} color={theme.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <KeyboardAvoidingView 
@@ -252,19 +412,19 @@ function ChatContent() {
           data={messages}
           renderItem={renderItem}
           keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}        
+          contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}        
           ListFooterComponent={loading && <View style={styles.messageRow}><Image source={YOLDAS_AVATAR} style={styles.avatar} /><TypingIndicator theme={theme} /></View>}
         />
 
-        <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 15) }]}>
+        <View style={[styles.inputArea, { 
+          paddingBottom: Platform.OS === 'ios' ? insets.bottom : 10,
+          marginBottom: Platform.OS === 'android' ? (keyboardHeight > 0 ? keyboardHeight : 10) : 0
+        }]}>
           <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <TouchableOpacity onPress={startListening} style={styles.actionBtn}>
-                <Mic size={22} color={theme.primary} />
-            </TouchableOpacity>
             
             <TextInput
               ref={inputRef}
-              style={[styles.input, { color: theme.text }]}
+              style={[styles.input, { color: theme.text, paddingLeft: 15 }]}
               placeholder={inputLocked ? "Yoldaş düşünüyor..." : "İçini dök derman arayalım..."}
               placeholderTextColor={theme.subText}
               value={inputText}
@@ -274,7 +434,6 @@ function ChatContent() {
               editable={!inputLocked}
             />
             
-            {/* 🔥 DEĞİŞİKLİK: Gönder ve Durdur Butonları Arası Geçiş */}
             {inputLocked ? (
               <TouchableOpacity onPress={stopAction} style={[styles.sendBtn, { backgroundColor: '#F44336' }]}>
                 <Square size={18} color="#FFF" fill="#FFF" />
@@ -291,12 +450,61 @@ function ChatContent() {
           </Text>
         </View>
       </KeyboardAvoidingView>
+
+      <Modal visible={menuVisible} animationType="slide" transparent>
+         <View style={styles.modalOverlay}>
+            <View style={[styles.menuContent, { backgroundColor: theme.card }]}>
+               <View style={styles.menuHeader}>
+                  <Text style={[styles.menuTitle, { color: theme.text }]}>Sohbet Geçmişi</Text>
+                  <TouchableOpacity onPress={() => setMenuVisible(false)} style={{padding: 5}}>
+                    <X size={24} color={theme.subText} />
+                  </TouchableOpacity>
+               </View>
+
+               <TouchableOpacity onPress={createNewChat} style={[styles.newChatBtn, { backgroundColor: theme.primary + '15' }]}>
+                  <Plus size={20} color={theme.primary} />
+                  <Text style={[styles.newChatText, { color: theme.primary }]}>Yeni Sohbet Başlat</Text>
+               </TouchableOpacity>
+
+               <FlatList 
+                  data={sessions}
+                  keyExtractor={item => item.id}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                  renderItem={({item}) => {
+                    const isActive = item.id === activeSessionId;
+                    const dateObj = new Date(item.updatedAt);
+                    const isToday = dateObj.toDateString() === new Date().toDateString();
+                    const dateStr = isToday ? dateObj.toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'}) : dateObj.toLocaleDateString('tr-TR', {day: 'numeric', month: 'short'});
+
+                    return (
+                      <TouchableOpacity 
+                        onPress={() => switchSession(item.id)} 
+                        style={[styles.sessionItem, { borderBottomColor: theme.border, backgroundColor: isActive ? (isDarkMode ? '#2C2C2E' : '#F5F5F5') : 'transparent' }]}
+                      >
+                        <View style={{flexDirection: 'row', alignItems: 'center', flex: 1}}>
+                          <MessageSquare size={20} color={isActive ? theme.primary : theme.subText} style={{marginRight: 12}} />
+                          <View style={{flex: 1}}>
+                            <Text style={[styles.sessionTitle, { color: isActive ? theme.primary : theme.text }]} numberOfLines={1}>
+                              {item.title}
+                            </Text>
+                            <Text style={{color: theme.subText, fontSize: 12, marginTop: 2}}>{dateStr}</Text>
+                          </View>
+                        </View>
+                        
+                        <TouchableOpacity onPress={() => deleteSession(item.id)} style={{padding: 8}}>
+                          <Trash2 size={20} color="#FF3B30" />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  }}
+               />
+            </View>
+         </View>
+      </Modal>
+
     </SafeAreaView>
   );
-}
-
-export default function ChatScreen(props) {
-  return <ChatContent {...props} />;
 }
 
 const styles = StyleSheet.create({
@@ -309,7 +517,7 @@ const styles = StyleSheet.create({
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50', marginRight: 5 },
   onlineText: { fontSize: 12, fontWeight: '600' },
   
-  listContent: { padding: 16, paddingBottom: 10 }, 
+  listContent: { padding: 16 }, 
   messageRow: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
   avatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
   bubble: { padding: 14, borderRadius: 20, maxWidth: '80%', elevation: 1, shadowOpacity: 0.05 },
@@ -323,7 +531,15 @@ const styles = StyleSheet.create({
   
   inputArea: { paddingHorizontal: 12, paddingTop: 5, backgroundColor: 'transparent' }, 
   inputContainer: { flexDirection: 'row', alignItems: 'center', borderRadius: 30, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
-  actionBtn: { padding: 10 },
   input: { flex: 1, maxHeight: 100, paddingVertical: 8, fontSize: 16 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginLeft: 5 }
+  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginLeft: 5 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  menuContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', minHeight: '50%', padding: 20 },
+  menuHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  menuTitle: { fontSize: 20, fontWeight: 'bold' },
+  newChatBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 16, marginBottom: 20 },
+  newChatText: { fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
+  sessionItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 12, borderBottomWidth: 1, borderRadius: 12, marginBottom: 4 },
+  sessionTitle: { fontSize: 16, fontWeight: '600' }
 });

@@ -17,7 +17,7 @@ import ViewShot from 'react-native-view-shot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initDB, getAmeller, updateAmelStatus, addAmel, deleteAmel, addFavorite, removeFavorite, isFavorite } from '../database/db';
 import { shareAsImage } from '../services/shareService';
-import { registerForPushNotificationsAsync, scheduleAllPrayerNotifications, scheduleRamadanAlerts } from '../services/notificationService'; 
+import { registerForPushNotificationsAsync, scheduleAllPrayerNotifications } from '../services/notificationService'; 
 import { useTheme } from '../context/ThemeContext';
 import { SURE_ISIMLERI, ESMA_TR_LIST, GUNLUK_HADISLER } from '../database/libraryData'; 
 
@@ -43,7 +43,6 @@ export default function HomeScreen() {
   const [tasks, setTasks] = useState([]);
   const [vakitler, setVakitler] = useState(null);
   const [hijriMonth, setHijriMonth] = useState(null);
-  const [isPremium, setIsPremium] = useState(false); // 🔥 Premium Kontrolü
 
   const lastVakitlerRef = useRef(null); 
   const lastScheduleTimeRef = useRef(0);
@@ -95,13 +94,12 @@ export default function HomeScreen() {
   const hadisRef = useRef();
   const esmaRef = useRef();
 
-  // 🔥 YENİ: REKLAM ALANI BİLEŞENİ
+  // 🔥 GERÇEK REKLAM ID'Sİ EKLENDİ VE PREMIUM KONTROLÜ KALDIRILDI
   const renderBannerAd = () => {
-    if (isPremium) return null; // Premium kullanıcı ise boş döndür
     return (
       <View style={styles.adContainer}>
         <BannerAd
-          unitId={__DEV__ ? TestIds.BANNER : 'GERÇEK_ADMOB_BANNER_ID_BURAYA'}
+          unitId={__DEV__ ? TestIds.BANNER : 'ca-app-pub-7784699073373527/7030435714'}
           size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: true }}
         />
@@ -145,6 +143,31 @@ export default function HomeScreen() {
             day: 'numeric', month: 'long', year: 'numeric'
         }).format(new Date());
     } catch (e) { return ""; }
+  };
+
+  const checkAndResetDailyTasks = async () => {
+    try {
+      const todayDate = new Date().toDateString();
+      const lastTaskUpdate = await AsyncStorage.getItem('lastTaskUpdateDate');
+
+      if (lastTaskUpdate !== todayDate) {
+        const allTasks = getAmeller();
+        
+        allTasks.forEach(task => {
+           if(task.tamamlandi === 1) {
+              updateAmelStatus(task.id, 0); 
+           }
+        });
+
+        await AsyncStorage.setItem('lastTaskUpdateDate', todayDate);
+      }
+      
+      refreshTasks();
+
+    } catch (error) {
+      console.log("Görev sıfırlama hatası:", error);
+      refreshTasks(); 
+    }
   };
 
   const updateStreakData = async () => {
@@ -265,12 +288,7 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const checkPremium = async () => {
-        const premiumStatus = await AsyncStorage.getItem('isPremiumUser');
-        setIsPremium(premiumStatus === 'true');
-      };
-      checkPremium();
-      refreshTasks();
+      checkAndResetDailyTasks(); 
       updateStreakData();
       getLocationAndVakitler();
       if (ayet.id) setIsAyetFav(isFavorite(ayet.id));
@@ -288,7 +306,7 @@ export default function HomeScreen() {
         const uniqueKey = `v_final_v18_${currentHour}_${vakitler.Fajr}_${locationName}`;
         if (lastVakitlerRef.current !== uniqueKey) {
           await scheduleAllPrayerNotifications(vakitler); 
-          await scheduleRamadanAlerts(vakitler); 
+          //await scheduleRamadanAlerts(vakitler); 
           lastVakitlerRef.current = uniqueKey;
           lastScheduleTimeRef.current = now; 
         }
@@ -461,9 +479,38 @@ export default function HomeScreen() {
   };
 
   const refreshTasks = () => setTasks(getAmeller());
-  const toggleTask = (id, cur) => { const newStatus = cur === 1 ? 0 : 1; updateAmelStatus(id, newStatus); refreshTasks(); if (newStatus === 1) { const randomMsg = MOTIVATION_MESSAGES[Math.floor(Math.random() * MOTIVATION_MESSAGES.length)]; setCelebrationMsg(randomMsg); setCelebrationVisible(true); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } else { Haptics.selectionAsync(); } };
-  const handleSaveTask = () => { if (newTaskTitle.trim() === '') return; addAmel(newTaskTitle); setNewTaskTitle(''); setModalVisible(false); refreshTasks(); };
-  const handleDeleteTask = (id) => { try { deleteAmel(id); refreshTasks(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch (e) { console.log("Silme hatası:", e); } };
+  
+  const toggleTask = (id, cur) => { 
+    const newStatus = cur === 1 ? 0 : 1; 
+    updateAmelStatus(id, newStatus); 
+    refreshTasks(); 
+    if (newStatus === 1) { 
+      const randomMsg = MOTIVATION_MESSAGES[Math.floor(Math.random() * MOTIVATION_MESSAGES.length)]; 
+      setCelebrationMsg(randomMsg); 
+      setCelebrationVisible(true); 
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); 
+    } else { 
+      Haptics.selectionAsync(); 
+    } 
+  };
+  
+  const handleSaveTask = () => { 
+    if (newTaskTitle.trim() === '') return; 
+    addAmel(newTaskTitle); 
+    setNewTaskTitle(''); 
+    setModalVisible(false); 
+    refreshTasks(); 
+  };
+  
+  const handleDeleteTask = (id) => { 
+    try { 
+      deleteAmel(id); 
+      refreshTasks(); 
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); 
+    } catch (e) { 
+      console.log("Silme hatası:", e); 
+    } 
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 25) + 10 : 0 }]}>
@@ -554,6 +601,7 @@ export default function HomeScreen() {
           {loading ? <ActivityIndicator color={theme.primary} style={{ marginTop: 20 }} /> : (
             <View style={styles.vakitGrid}>
               <VakitBox ad="İmsak" saat={vakitler?.Fajr} theme={theme} />
+              <VakitBox ad="Güneş" saat={vakitler?.Sunrise} theme={theme} />
               <VakitBox ad="Öğle" saat={vakitler?.Dhuhr} theme={theme} />
               <VakitBox ad="İkindi" saat={vakitler?.Asr} theme={theme} />
               <VakitBox ad="Akşam" saat={vakitler?.Maghrib} theme={theme} />
@@ -562,7 +610,6 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* 🔥 REKLAM ALANI 1 (Vakitlerden Hemen Sonra) */}
         {renderBannerAd()}
 
         {/* AYET KARTI */}
@@ -617,7 +664,6 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* 🔥 REKLAM ALANI 2 (En Alt Kısım) */}
         {renderBannerAd()}
 
       </ScrollView>
@@ -684,8 +730,8 @@ const styles = StyleSheet.create({
   progressBarFill: { height: '100%', borderRadius: 4 },
   vakitGrid: { flexDirection: 'row', justifyContent: 'space-between' },
   vakitBox: { alignItems: 'center' },
-  vakitAd: { fontSize: 11, marginBottom: 4, fontWeight: '600' },
-  vakitSaat: { fontSize: 13, fontWeight: 'bold' },
+  vakitAd: { fontSize: 10, marginBottom: 4, fontWeight: '600' },
+  vakitSaat: { fontSize: 12, fontWeight: 'bold' },
   shareableWrapper: { marginBottom: 25 },
   mainCard: { borderRadius: 24, padding: 24, elevation: 8 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
@@ -717,13 +763,5 @@ const styles = StyleSheet.create({
   celebrationText: { fontSize: 16, textAlign: 'center', marginBottom: 20, lineHeight: 22, fontWeight: '500' },
   celebrationButton: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25 },
   celebrationButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  // 🔥 Reklam Alanı Stili
-  adContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    width: '100%',
-    backgroundColor: 'transparent',
-    marginBottom: 20,
-  },
+  adContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 15, width: '100%', backgroundColor: 'transparent', marginBottom: 20 },
 });

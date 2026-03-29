@@ -7,13 +7,38 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:578055154311:android:2a1ecae1cd1297aebe6622",
+        "mobilesdk_app_id": "1:578055154311:android:f15e20c2d5de03bcbe6622",
         "android_client_info": {
-          "package_name": "com.yoldas.app"
+          "package_name": "com.emre.yoldas"
         }
       },
       "oauth_client": [],
       "api_key": [
+        {
+          "current_key": "AIzaSyCZaQg9akk3Xv9Bk3VKrGsWCBW-fVJ8uhI"
+        },
+        {
+          "current_key": "AIzaSyAjNtUlACPsK0kpyKYiYidXhmDuR7jeY8c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:578055154311:android:2a1ecae1cd1297aebe6622",
+        "android_client_info": {
+          "package_name": "com.emre.yoldas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZaQg9akk3Xv9Bk3VKrGsWCBW-fVJ8uhI"
+        },
         {
           "current_key": "AIzaSyAjNtUlACPsK0kpyKYiYidXhmDuR7jeY8c"
         }

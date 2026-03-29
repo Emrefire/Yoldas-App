@@ -20,16 +20,13 @@ export async function registerForPushNotificationsAsync() {
     finalStatus = status;
   }
 
-  if (finalStatus !== 'granted') {
-    return false;
-  }
-  return true;
+  return finalStatus === 'granted';
 }
 
 export async function scheduleAllPrayerNotifications(vakitler) {
-  try {
+ try {
     await Notifications.cancelAllScheduledNotificationsAsync();
-    console.log("🧹 [Sistem] Eski bildirimler temizlendi.");
+    console.log("🧹 [Sistem] Eski bildirimler temizlendi, yenileri ışık hızında kuruluyor...");
 
     const notifyOnTimeStr = await AsyncStorage.getItem('notifyOnTime');
     const notifyOnTime = notifyOnTimeStr !== null ? JSON.parse(notifyOnTimeStr) : true;
@@ -37,29 +34,38 @@ export async function scheduleAllPrayerNotifications(vakitler) {
     const notifyPreAlertsStr = await AsyncStorage.getItem('notifyPreAlerts'); 
     const notifyPreAlerts = notifyPreAlertsStr !== null ? JSON.parse(notifyPreAlertsStr) : true;
 
+    if (!notifyOnTime && !notifyPreAlerts) return;
+
     const selectedSound = await AsyncStorage.getItem('userNotificationSound') || 'default';
-    const soundFile = selectedSound === 'default' ? 'default' : `${selectedSound}.wav`;
-    const androidChannelId = selectedSound; 
+    const soundFile = selectedSound === 'default' ? null : `${selectedSound}.mp3`; 
+    const androidChannelId = selectedSound === 'default' ? 'default' : selectedSound; 
 
-    if (!notifyOnTime) return;
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync(androidChannelId, {
+        name: 'Vakit Bildirimleri',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: soundFile, 
+        enableVibrate: true,
+        vibrationPattern: [0, 250, 250, 250],
+      });
+    }
 
-    const now = new Date();
     const SAFETY_BUFFER = 2 * 60 * 1000; 
 
     const prayerConfig = [
-      { key: 'Fajr', title: 'İmsak Vakti 🕌', msg: 'Sabah namazı vakti girdi. Haydi namaza.' },
+      { key: 'Fajr', title: 'İmsak Vakti 🕌', msg: 'Sabah namazı vakti girdi. Haydi felaha.' },
       { key: 'Dhuhr', title: 'Öğle Ezanı 🕌', msg: 'Öğle namazı vakti girdi.' },
       { key: 'Asr', title: 'İkindi Ezanı 🕌', msg: 'İkindi namazı vakti girdi.' },
-      { key: 'Maghrib', title: 'Akşam Ezanı 🕌', msg: 'Akşam namazı vakti girdi. İftar vakti!' },
+      { key: 'Maghrib', title: 'Akşam Ezanı 🕌', msg: 'Akşam namazı vakti girdi. Günün yorgunluğunu huzurla at.' },
       { key: 'Isha', title: 'Yatsı Ezanı 🕌', msg: 'Yatsı namazı vakti girdi. Günü ibadetle taçlandır.' },
     ];
 
     const preAlertConfig = [
-      { key: 'Fajr', title: 'Sahura 45 Dakika! 🌙', type: 'Sahur' },
-      { key: 'Maghrib', title: 'İftara 45 Dakika! 🌅', type: 'İftar' },
-      { key: 'Dhuhr', title: 'Öğle Vaktine 45 Kaldı 🌿', type: 'Maneviyat' },
-      { key: 'Asr', title: 'İkindiye 45 Kaldı 🌿', type: 'Maneviyat' },
-      { key: 'Isha', title: 'Yatsıya 45 Kaldı 🌿', type: 'Maneviyat' },
+      { key: 'Fajr', title: 'Sabah Namazına 45 Dk 🌙', type: 'Sabah' },
+      { key: 'Maghrib', title: 'Akşam Vaktine 45 Dk 🌅', type: 'Akşam' },
+      { key: 'Dhuhr', title: 'Öğle Vaktine 45 Kaldı 🌿', type: 'Öğle' },
+      { key: 'Asr', title: 'İkindiye 45 Kaldı 🌿', type: 'İkindi' },
+      { key: 'Isha', title: 'Yatsıya 45 Kaldı 🌿', type: 'Yatsı' },
     ];
 
     let scheduledCount = 0;
@@ -68,85 +74,87 @@ export async function scheduleAllPrayerNotifications(vakitler) {
       ...preAlertConfig.map(c => ({ ...c, offset: -45 }))
     ];
 
-    for (let p of allConfigs) {
-      if (p.offset === -45 && !notifyPreAlerts) continue;
+    // 🔥 KRİTİK DEĞİŞİKLİK: Sırayla bekleme (for) kaldırıldı, hepsi AYNI ANDA PARALEL (Promise.all) kuruluyor!
+    const schedulingPromises = allConfigs.map(async (p) => {
+      try {
+          if (p.offset === -45 && !notifyPreAlerts) return;
 
-      let timeStr = vakitler[p.key]; 
-      if (!timeStr) continue;
+          let timeStr = vakitler[p.key]; 
+          if (!timeStr) return;
 
-      // Saati API'den temiz bir şekilde çekiyoruz
-      const [hourStr, minuteStr] = timeStr.split(' ')[0].split(':');
-      const hour = parseInt(hourStr, 10);
-      const minute = parseInt(minuteStr, 10);
+          const [hourStr, minuteStr] = timeStr.split(' ')[0].split(':');
+          const hour = parseInt(hourStr, 10);
+          const minute = parseInt(minuteStr, 10);
 
-      let targetDate = new Date();
-      targetDate.setHours(hour, minute, 0, 0);
+          let targetDate = new Date();
+          targetDate.setHours(hour, minute, 0, 0);
+          
+          let targetTime = targetDate.getTime();
 
-      // Saniye veya dakika kaymasını önlemek için direkt tarihi manipüle ediyoruz
-      if (p.offset !== 0) {
-        targetDate.setMinutes(targetDate.getMinutes() + p.offset);
-      }
-
-      // Eğer hesaplanan vakit geçmişteyse, yarına kur
-      if (targetDate.getTime() <= (now.getTime() + SAFETY_BUFFER)) {
-        targetDate.setDate(targetDate.getDate() + 1);
-      }
-
-      // Vakte 2 dakikadan fazla varsa kur (Hemen şimdi çalmasını engellemek için)
-      if (targetDate.getTime() > now.getTime() + 120000) {
-        let finalMsg = p.msg;
-
-        // 🔥 YAPAY ZEKA KONTROLÜ VE ZAMAN AŞIMI (TIMEOUT)
-        if (p.offset === -45 && (p.type === 'Sahur' || p.type === 'İftar')) {
-          try {
-            const askYoldas = functions().httpsCallable('askYoldas');
-            
-            // AI için maksimum 5 saniye bekleriz. Gelmezse sistemi tıkamaz, devam eder.
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 5000));
-            const aiPromise = askYoldas({ prompt: `${p.type} vaktine 45 dakika kaldı. Bana çok kısa, samimi ve manevi bir hatırlatma yaz. (Tek cümle)` });
-            
-            const result = await Promise.race([aiPromise, timeoutPromise]);
-            finalMsg = result.data.answer;
-          } catch (e) {
-            finalMsg = p.type === 'Sahur' ? "Bereket vakti yaklaşıyor can kardeşim." : "İftar sevinci yaklaşıyor aziz dostum.";
+          if (p.offset !== 0) {
+            targetTime += (p.offset * 60 * 1000); 
           }
-        } else if (p.offset === -45) {
-          finalMsg = "Vaktin girmesine 45 dk kaldı, hazırlıkları tamamlayalım mı? 😊";
-        }
 
-        const uniqueId = `${p.key}_${p.offset}_${targetDate.getDate()}`;
+          if (targetTime <= (Date.now() + SAFETY_BUFFER)) {
+            targetTime += (24 * 60 * 60 * 1000); 
+          }
 
-        // 🔥 KRİTİK DEĞİŞİKLİK: Saniye hesabı (TIME_INTERVAL) yerine TAM TARİH (DATE) kullanıyoruz
-        await Notifications.scheduleNotificationAsync({
-          identifier: uniqueId,
-          content: {
-            title: p.title,
-            body: finalMsg,
-            sound: soundFile, 
-            color: '#2D5A27',
-            android: {
+          let finalDateObj = new Date(targetTime);
+
+          if (finalDateObj.getTime() > Date.now() + 60000) {
+            let finalMsg = p.msg;
+
+            if (p.offset === -45 && (p.type === 'Sabah' || p.type === 'Akşam')) {
+              try {
+                const askYoldas = functions().httpsCallable('askYoldas');
+                // Timeout 3 saniyeye düşürüldü, kullanıcı uygulamadan çıkmadan yetişmesi için
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT')), 3000));
+                const aiPromise = askYoldas({ message: `${p.type} namazı vaktine 45 dakika kaldı. Bana çok kısa, samimi ve manevi bir hatırlatma yaz. (Tek cümle)` });
+                
+                aiPromise.catch(() => {}); // Hatayı gizlice yut
+
+                const result = await Promise.race([aiPromise, timeoutPromise]);
+                finalMsg = result.data.answer;
+              } catch (e) {
+                finalMsg = p.type === 'Sabah' ? "Günün ilk bereketine, Sabah namazına hazırlanma vakti can kardeşim." : "Günün yorgunluğunu Akşam namazıyla atma vakti aziz dostum.";
+              }
+            } else if (p.offset === -45) {
+              finalMsg = `${p.type} vaktinin girmesine 45 dk kaldı, hazırlıkları tamamlayalım mı? 😊`;
+            }
+
+            const uniqueId = `${p.key}_${p.offset}_${finalDateObj.getDate()}`;
+
+            await Notifications.scheduleNotificationAsync({
+              identifier: uniqueId,
+              content: {
+                title: p.title,
+                body: finalMsg,
+                color: '#2D5A27',
+                sound: soundFile || 'default', 
+                android: {
+                    channelId: androidChannelId, 
+                    priority: 'max',
+                },
+              },
+              trigger: {
+                type: 'date', 
+                date: finalDateObj, 
                 channelId: androidChannelId, 
-                priority: 'max',
-                sound: true 
-            },
-          },
-          trigger: {
-            // "Şu andan X saniye sonra" DEĞİL, "Tam olarak şu saatte/tarihte" demek. Asla şaşmaz.
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: targetDate, 
-            channelId: androidChannelId, 
-          },
-        });
-        
-        scheduledCount++;
+              },
+            });
+            
+            scheduledCount++;
+          }
+      } catch (innerError) {
+          console.log(`❌ ${p.key} bildiriminde hata:`, innerError);
       }
-    }
-    console.log(`✅ İşlem tamam. Toplam ${scheduledCount} bildirim tam vaktine kuruldu. Seçilen Ses: ${androidChannelId}`);
-  } catch (error) {
-    console.log("❌ Planlama hatası:", error);
-  }
-}
+    });
 
-export async function scheduleRamadanAlerts(vakitler) {
-    console.log("Ramazan alarmları ana fonksiyona dahil edildi.");
+    // Bütün bildirimlerin aynı anda kurulmasını bekle
+    await Promise.all(schedulingPromises);
+    
+    console.log(`✅ İşlem tamam. Toplam ${scheduledCount} bildirim TAM ZAMANLI olarak Android'e kazındı!`);
+  } catch (error) {
+    console.log("❌ Ana Planlama hatası:", error);
+  }
 }

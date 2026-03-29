@@ -70,26 +70,39 @@ export default function ImsakiyeScreen() {
         }
       }
 
+      // 🔴 FALLBACK (Varsayılan) KOORDİNATLAR
       let lat = 41.0082, lon = 28.9784, displayName = "İstanbul"; 
 
       if (!useAutoLocation && userCity) {
         displayName = userCity;
-        let geocodeResult = await Location.geocodeAsync(userCity);
-        if (geocodeResult.length > 0) {
-          lat = geocodeResult[0].latitude;
-          lon = geocodeResult[0].longitude;
+        // 🔥 Manuel Şehir Arama (Zırhlı)
+        try {
+          let geocodeResult = await Location.geocodeAsync(userCity);
+          if (geocodeResult.length > 0) {
+            lat = geocodeResult[0].latitude;
+            lon = geocodeResult[0].longitude;
+          }
+        } catch (geoError) {
+          console.log("Geocode hatası (Emülatör kaynaklı olabilir), varsayılan konum kullanılacak.");
         }
       } else {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          let location = await Location.getCurrentPositionAsync({});
-          lat = location.coords.latitude;
-          lon = location.coords.longitude;
-          let revGeocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
-          if (revGeocode.length > 0) displayName = revGeocode[0].city || revGeocode[0].region || "Konum";
+        // 🔥 Otomatik Konum Arama (Zırhlı)
+        try {
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            let location = await Location.getCurrentPositionAsync({});
+            lat = location.coords.latitude;
+            lon = location.coords.longitude;
+            let revGeocode = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+            if (revGeocode.length > 0) displayName = revGeocode[0].city || revGeocode[0].region || "Mevcut Konum";
+          }
+        } catch (gpsError) {
+          console.log("GPS hatası (Emülatör kaynaklı olabilir), varsayılan konum kullanılacak.");
+          displayName = "Konum Bulunamadı (İstanbul)";
         }
       }
 
+      // API ÇAĞRISI
       const [res1, res2] = await Promise.all([
         axios.get(`${CALENDAR_API_URL}/${year}/${month}`, { params: { latitude: lat, longitude: lon, method: 13 } }),
         axios.get(`${CALENDAR_API_URL}/${nextYear}/${nextMonth}`, { params: { latitude: lat, longitude: lon, method: 13 } })
@@ -100,7 +113,8 @@ export default function ImsakiyeScreen() {
       processAndSetData(rawList, displayName);
 
     } catch (error) {
-      console.error("Imsakiye API Hatası:", error);
+      // 🔥 console.error YERİNE console.log KULLANDIK (Kırmızı ekran çıkmasın diye)
+      console.log("Imsakiye API veya Genel Hata:", error.message);
       setLoading(false);
     }
   };
@@ -215,8 +229,8 @@ export default function ImsakiyeScreen() {
             <View style={styles.headerCardWrapper}>
               <View style={[styles.timerCard, { backgroundColor: theme.primary }]}>
                 <View style={styles.cardTopRow}>
-                    <View style={styles.badgeContainer}><MapPin size={12} color="#FFF" /><Text style={styles.badgeText}>{city}</Text></View>
-                    <View style={styles.badgeContainer}><Moon size={10} color="#FFF" /><Text style={styles.badgeText}>{hijriDateStr}</Text></View>
+                  <View style={styles.badgeContainer}><MapPin size={12} color="#FFF" /><Text style={styles.badgeText}>{city}</Text></View>
+                  <View style={styles.badgeContainer}><Moon size={10} color="#FFF" /><Text style={styles.badgeText}>{hijriDateStr}</Text></View>
                 </View>
                 <View style={styles.timerMain}><Text style={styles.timerLabel}>{nextVakitName}</Text><Text style={styles.timerValue}>{countdown}</Text></View>
                 <Calendar size={120} color="rgba(255,255,255,0.08)" style={styles.bgIcon} />

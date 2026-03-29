@@ -14,7 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
 // 💡 Canlıya çıkarken kendi Banner ID'ni buraya yazacaksın.
-const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy'; 
+const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-7784699073373527/7030435714'; 
 
 const { width, height } = Dimensions.get('window');
 const COMPASS_SIZE = Math.min(width * 0.75, height * 0.35);

@@ -17,8 +17,14 @@
         "EXPO_PUBLIC_OVERPASS_MAIN": "https://overpass-api.de/api/interpreter",
         "EXPO_PUBLIC_OVERPASS_BACKUP": "https://overpass.kumi.systems/api/interpreter",
         "EXPO_PUBLIC_POLICY_URL": "https://docs.google.com/document/d/15LeLTMcl9zLOd8_8VgBS2T5g3EU--zae488bvZQEOAo/edit?usp=sharing",
-        "EXPO_PUBLIC_CALENDAR_API_URL": "https://api.aladhan.com/v1/calendar"
-
+        "EXPO_PUBLIC_CALENDAR_API_URL": "https://api.aladhan.com/v1/calendar",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyDw1ezd9ZsBp4EOCW1rSGZ57vW8LFVx4bw",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "yoldasapp-1272f.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "yoldasapp-1272f",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "yoldasapp-1272f.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "578055154311",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:578055154311:web:9cb0ecb733073e4dbe6622",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-M8PLW419C4"
       }
     },
     "production": {
@@ -28,8 +34,14 @@
         "EXPO_PUBLIC_OVERPASS_MAIN": "https://overpass-api.de/api/interpreter",
         "EXPO_PUBLIC_OVERPASS_BACKUP": "https://overpass.kumi.systems/api/interpreter",
         "EXPO_PUBLIC_POLICY_URL": "https://docs.google.com/document/d/15LeLTMcl9zLOd8_8VgBS2T5g3EU--zae488bvZQEOAo/edit?usp=sharing",
-        "EXPO_PUBLIC_CALENDAR_API_URL": "https://api.aladhan.com/v1/calendar"
-
+        "EXPO_PUBLIC_CALENDAR_API_URL": "https://api.aladhan.com/v1/calendar",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyDw1ezd9ZsBp4EOCW1rSGZ57vW8LFVx4bw",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "yoldasapp-1272f.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "yoldasapp-1272f",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "yoldasapp-1272f.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "578055154311",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:578055154311:web:9cb0ecb733073e4dbe6622",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-M8PLW419C4"
       }
     }
   },

@@ -12,7 +12,7 @@ import { libraryCategories } from '../database/libraryData';
 import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
 // 💡 Geliştirme aşamasında test reklamı, canlıya çıkarken kendi Banner ID'ni buraya yazacaksın.
-const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy'; 
+const adUnitId = __DEV__ ? TestIds.BANNER : 'ca-app-pub-7784699073373527/7030435714'; 
 
 const { width } = Dimensions.get('window');
 const CARD_GAP = 12;

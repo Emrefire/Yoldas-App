@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
-import { Restart } from 'lucide-react-native'; // İkonu projene göre ayarla
 
 class GlobalErrorBoundary extends Component {
   constructor(props) {

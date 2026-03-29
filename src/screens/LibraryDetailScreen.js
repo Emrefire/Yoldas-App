@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  StyleSheet, Text, View, FlatList, TouchableOpacity, 
+  StyleSheet, Text, View, FlatList, Pressable, Animated, 
   SafeAreaView, ActivityIndicator, TextInput, Keyboard, Clipboard, Alert, Platform, StatusBar
 } from 'react-native';
-import { ChevronLeft, ChevronRight, Search, X, Copy, Sparkles, RefreshCw } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Search, Copy, Sparkles, RefreshCw, BookOpen } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { fetchLibraryData } from '../services/apiService';
@@ -18,6 +18,27 @@ const SEARCH_TABS = [
 ];
 
 const KURAN_API_URL = process.env.EXPO_PUBLIC_KURAN_API_URL;
+
+// 🔥 ANİMASYONLU KART BİLEŞENİ
+const AnimatedCard = ({ children, onPress, theme }) => {
+  const scaleValue = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleValue, { toValue: 0.96, useNativeDriver: true }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleValue, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
+  };
+
+  return (
+    <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={onPress}>
+      <Animated.View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, transform: [{ scale: scaleValue }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 export default function LibraryDetailScreen({ route }) {
   const navigation = useNavigation();
@@ -37,7 +58,6 @@ export default function LibraryDetailScreen({ route }) {
 
   const loadContent = async () => {
     setLoading(true);
-    
     if (categoryTitle.toLowerCase().includes('dua') || categoryId === 'gunluk-dualar') {
         const shuffled = [...GUNLUK_DUALAR].sort(() => 0.5 - Math.random());
         const selected = shuffled.slice(0, 10);
@@ -69,54 +89,47 @@ export default function LibraryDetailScreen({ route }) {
 
   const startAIChat = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    let initialMsg = `Selam Yoldaş! ${categoryTitle} konusu hakkında biraz hasbihal edebilir miyiz? Bu içeriklerin manevi hayatımıza katacağı güzellikler nelerdir?`;
-    
-    if (type === 'quran') {
-        initialMsg = "Selam Yoldaş! Kur'an-ı Kerim'i anlamak, ayetlerin nuruyla hayatımızı aydınlatmak üzerine bize neler tavsiye edersin? Surelerin sırlarını nasıl keşfedebiliriz?";
-    } else if (categoryTitle.toLowerCase().includes('dua')) {
-        initialMsg = "Selam Yoldaş! Bugün okuduğum duaların kabul olması ve kalbime huzur vermesi için neler yapmalıyım?";
-    }
-
+    let initialMsg = `Selam Yoldaş! ${categoryTitle} konusu hakkında biraz hasbihal edebilir miyiz?`;
+    if (type === 'quran') initialMsg = "Selam Yoldaş! Kur'an-ı Kerim'i anlamak ve hayatımıza uygulamak üzerine bize neler tavsiye edersin?";
     navigation.navigate('ChatScreen', { initialMessage: initialMsg });
   };
 
   const handleTabChange = (tabId) => {
+    Haptics.selectionAsync();
     setActiveTab(tabId);
     setSearchQuery('');
+    // Sekme değişince filtreyi sıfırla
+    if (tabId === 'sure') setFilteredData(data);
   };
 
-  // 🔥 ÇÖZÜLEN KISIM BURASI: TAM SEÇİLEN SAYFA/CÜZE GİDER
   const handleQuickGo = async (number) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setNavigating(true);
       try {
           let targetSurahId = null;
           let targetSurahName = "";
-          let targetPage = null;
+          let targetAyahInSurah = null; 
 
           if (activeTab === 'sayfa') {
-              // API'deki limit=1 parametresi sayfa kaymalarına neden olabiliyor, kaldırıldı.
               const res = await axios.get(`${KURAN_API_URL}/page/${number}/quran-uthmani`);
               const firstAyah = res.data.data.ayahs[0];
               targetSurahId = firstAyah.surah.number;
               targetSurahName = firstAyah.surah.englishName;
-              targetPage = number; // Direkt tıklanılan sayfa numarası
+              targetAyahInSurah = firstAyah.numberInSurah;
           } else if (activeTab === 'cuz') {
               const res = await axios.get(`${KURAN_API_URL}/juz/${number}/quran-uthmani`);
               const firstAyah = res.data.data.ayahs[0];
               targetSurahId = firstAyah.surah.number;
               targetSurahName = firstAyah.surah.englishName;
-              targetPage = firstAyah.page; // Cüzlerin başlangıç sayfası API'den gelir
+              targetAyahInSurah = firstAyah.numberInSurah;
           }
 
           if (targetSurahId) {
               const localSurah = data.find(d => d.id === targetSurahId.toString() || d.id === targetSurahId);
-              
-              // 🔥 initialAyah parametresi scroll sapmasına neden olduğu için kaldırıldı.
-              // Artık "Sure" listesinde olduğu gibi sadece initialPage gönderiyoruz.
               navigation.navigate('SurahDetail', { 
                   surahId: targetSurahId, 
                   surahName: localSurah ? localSurah.title : targetSurahName,
-                  initialPage: targetPage 
+                  initialAyah: targetAyahInSurah 
               });
           }
       } catch (error) {
@@ -126,28 +139,29 @@ export default function LibraryDetailScreen({ route }) {
       }
   };
 
+  // 🔥 YENİ: ARAMA FONKSİYONU SAYFA VE CÜZ İÇİN DE ÇALIŞIYOR
   const handleSearch = (text) => {
     setSearchQuery(text);
+    
     if (text.trim() === '') {
-      setFilteredData(data);
+      if (activeTab === 'sure') setFilteredData(data);
       return;
     }
-    const filtered = data.filter(item => 
-        item.title.toLowerCase().includes(text.toLowerCase()) || 
-        (item.detail && item.detail.toLowerCase().includes(text.toLowerCase())) ||
-        (item.meaning && item.meaning.toLowerCase().includes(text.toLowerCase())) ||
-        item.id.toString() === text
-    );
-    setFilteredData(filtered);
+
+    if (activeTab === 'sure') {
+      const filtered = data.filter(item => 
+          item.title.toLowerCase().includes(text.toLowerCase()) || 
+          (item.detail && item.detail.toLowerCase().includes(text.toLowerCase())) ||
+          item.id.toString() === text
+      );
+      setFilteredData(filtered);
+    }
   };
 
   const handleItemPress = (item) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (type === 'quran') {
-      navigation.navigate('SurahDetail', { 
-        surahId: item.id, 
-        surahName: item.title,
-        initialPage: item.page 
-      });
+      navigation.navigate('SurahDetail', { surahId: item.id, surahName: item.title });
     } else {
       Clipboard.setString(`${item.title}\n${item.detail}\n${item.meaning || item.source || ""}`);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -155,22 +169,33 @@ export default function LibraryDetailScreen({ route }) {
     }
   };
 
-  const renderGridItem = ({ item }) => (
-      <TouchableOpacity 
-        style={[styles.gridItem, { backgroundColor: theme.card, borderColor: theme.border }]}
-        onPress={() => handleQuickGo(item)}
-      >
-          <Text style={[styles.gridText, { color: theme.text }]}>
-              {activeTab === 'cuz' ? `${item}. Cüz` : `${item}. Sayfa`}
+  // Sayfa veya Cüz listesini oluştururken arama filtresini uygula
+  const getLinearData = () => {
+    const totalCount = activeTab === 'sayfa' ? 604 : 30;
+    const allItems = Array.from({length: totalCount}, (_, i) => i + 1);
+    
+    if (searchQuery.trim() === '') return allItems;
+    return allItems.filter(num => num.toString().includes(searchQuery));
+  };
+
+  const renderListItemLinear = ({ item }) => (
+    <AnimatedCard theme={theme} onPress={() => handleQuickGo(item)}>
+      <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+        <View style={{flexDirection: 'row', alignItems: 'center', flex: 1}}>
+          <View style={[styles.numberBox, { backgroundColor: theme.primary + '15', borderRadius: 12 }]}>
+            <BookOpen size={16} color={theme.primary} />
+          </View>
+          <Text style={[styles.cardTitle, { color: theme.text, fontSize: 17, marginLeft: 5 }]}>
+            {activeTab === 'cuz' ? `${item}. Cüz'den Başla` : `${item}. Sayfaya Git`}
           </Text>
-      </TouchableOpacity>
+        </View>
+        <ChevronRight size={22} color={theme.subText} opacity={0.5} />
+      </View>
+    </AnimatedCard>
   );
 
   const renderListItem = ({ item, index }) => (
-    <TouchableOpacity 
-      style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}
-      onPress={() => handleItemPress(item)}
-    >
+    <AnimatedCard theme={theme} onPress={() => handleItemPress(item)}>
       <View style={styles.cardHeader}>
         <View style={{flexDirection: 'row', alignItems: 'center', flex: 1}}>
           <View style={[styles.numberBox, { backgroundColor: theme.primary + '15' }]}>
@@ -187,7 +212,6 @@ export default function LibraryDetailScreen({ route }) {
               <View style={[styles.badge, { backgroundColor: theme.primary + '15' }]}><Text style={[styles.badgeText, { color: theme.primary }]}>Sf. {item.page}</Text></View>
           </View>
         )}
-
         {type === 'quran' ? <ChevronRight size={20} color={theme.subText} /> : <Copy size={18} color={theme.subText} style={{opacity: 0.5}} />}
       </View>
 
@@ -200,7 +224,7 @@ export default function LibraryDetailScreen({ route }) {
           <Text style={[styles.cardMeaning, { color: theme.subText }]}>{item.meaning || item.source}</Text>
         </View>
       )}
-    </TouchableOpacity>
+    </AnimatedCard>
   );
 
   return (
@@ -208,54 +232,54 @@ export default function LibraryDetailScreen({ route }) {
       {navigating && (
           <View style={styles.navOverlay}>
               <ActivityIndicator size="large" color={theme.primary} />
-              <Text style={{color: '#FFF', marginTop: 10, fontWeight: '600'}}>Hedef Bulunuyor...</Text>
+              <Text style={{color: '#FFF', marginTop: 10, fontWeight: '600'}}>Sayfa Hazırlanıyor...</Text>
           </View>
       )}
 
-      <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><ChevronLeft size={28} color={theme.text} /></TouchableOpacity>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <Pressable onPress={() => navigation.goBack()} style={({pressed}) => [{opacity: pressed ? 0.5 : 1}]}><ChevronLeft size={30} color={theme.text} /></Pressable>
         <Text style={[styles.headerTitle, { color: theme.text }]}>{categoryTitle}</Text>
-        
         {(categoryTitle.toLowerCase().includes('dua') || categoryId === 'gunluk-dualar') ? (
-            <TouchableOpacity onPress={refreshDuas}>
-                <RefreshCw size={24} color={theme.primary} />
-            </TouchableOpacity>
-        ) : (
-            <View style={{width: 28}} />
-        )}
+            <Pressable onPress={refreshDuas} style={({pressed}) => [{opacity: pressed ? 0.5 : 1}]}><RefreshCw size={24} color={theme.primary} /></Pressable>
+        ) : <View style={{width: 30}} />}
       </View>
 
+      {/* SEKMELER & ARAMA BÖLÜMÜ */}
       {type === 'quran' ? (
         <View style={styles.quranHeader}>
-            <View style={[styles.tabsContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                {SEARCH_TABS.map((tab) => (
-                    <TouchableOpacity 
+            <View style={[styles.tabsPillContainer, { backgroundColor: isDarkMode ? '#1C1C1E' : '#F2F2F7' }]}>
+                {SEARCH_TABS.map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <Pressable 
                         key={tab.id} 
-                        style={[styles.tabButton, activeTab === tab.id && { backgroundColor: theme.primary }]}
+                        style={[styles.tabPill, isActive && { backgroundColor: theme.card, shadowColor: '#000', elevation: 2, shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: {width: 0, height: 2} }]}
                         onPress={() => handleTabChange(tab.id)}
                     >
-                        <Text style={[styles.tabText, { color: activeTab === tab.id ? '#FFF' : theme.subText }]}>{tab.label}</Text>
-                    </TouchableOpacity>
-                ))}
+                        <Text style={[styles.tabPillText, { color: isActive ? theme.text : theme.subText, fontWeight: isActive ? '700' : '500' }]}>{tab.label}</Text>
+                    </Pressable>
+                  );
+                })}
             </View>
 
-            {activeTab === 'sure' && (
-                <View style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
-                    <Search size={18} color={theme.subText} />
-                    <TextInput 
-                        placeholder="Sure ara..." 
-                        style={[styles.searchInput, { color: theme.text }]}
-                        value={searchQuery}
-                        onChangeText={handleSearch}
-                        placeholderTextColor={theme.subText}
-                    />
-                </View>
-            )}
+            {/* ARAMA ÇUBUĞU ARTIK HER SEKMEDE VAR */}
+            <View style={[styles.searchBar, { backgroundColor: theme.card, borderColor: 'transparent', shadowColor: '#000', elevation: 3, shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: {width: 0, height: 4} }]}>
+                <Search size={20} color={theme.subText} />
+                <TextInput 
+                    placeholder={activeTab === 'sure' ? "Sure adı veya numarası ara..." : activeTab === 'sayfa' ? "Sayfa numarası girin..." : "Cüz numarası girin..."} 
+                    style={[styles.searchInput, { color: theme.text }]}
+                    value={searchQuery}
+                    onChangeText={handleSearch}
+                    placeholderTextColor={theme.subText}
+                    keyboardType={activeTab === 'sure' ? "default" : "number-pad"}
+                />
+            </View>
         </View>
       ) : (
         <View style={styles.simpleSearchContainer}>
-            <View style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
-                <Search size={18} color={theme.subText} />
+            <View style={[styles.searchBar, { backgroundColor: theme.card, borderColor: 'transparent', shadowColor: '#000', elevation: 3, shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: {width: 0, height: 4} }]}>
+                <Search size={20} color={theme.subText} />
                 <TextInput 
                     placeholder="Kelime ara..." 
                     style={[styles.searchInput, { color: theme.text, marginLeft: 8 }]}
@@ -267,44 +291,35 @@ export default function LibraryDetailScreen({ route }) {
         </View>
       )}
 
+      {/* LİSTE */}
       {loading ? (
         <View style={styles.loadingContainer}><ActivityIndicator size="large" color={theme.primary} /></View>
       ) : (
         <FlatList
-          key={`${activeTab}-${activeTab === 'sure' ? 1 : 3}`} 
-          data={
-              activeTab === 'sure' ? filteredData : 
-              activeTab === 'sayfa' ? Array.from({length: 604}, (_, i) => i + 1) : 
-              Array.from({length: 30}, (_, i) => i + 1)
-          }
-          renderItem={activeTab === 'sure' ? renderListItem : renderGridItem}
-          numColumns={activeTab === 'sure' ? 1 : 3} 
+          key={activeTab} 
+          data={activeTab === 'sure' ? filteredData : getLinearData()}
+          renderItem={activeTab === 'sure' ? renderListItem : renderListItemLinear}
           keyExtractor={(item, index) => `${activeTab}-${item.id || item}-${index}`}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={activeTab === 'sure' ? 20 : 60}
-          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={15}
           ListFooterComponent={
-            <TouchableOpacity 
-                style={[styles.aiBox, { backgroundColor: isDarkMode ? '#1C1C1E' : '#FFFFFF', borderColor: theme.border }]} 
-                onPress={startAIChat} 
-                activeOpacity={0.8}
-            >
-                <View style={styles.aiBoxLeft}>
-                    <View style={[styles.aiIconCircle, { backgroundColor: theme.primary }]}>
-                        <Sparkles size={18} color="#FFF" fill="#FFF" />
+            <AnimatedCard theme={theme} onPress={startAIChat}>
+                <View style={styles.aiBox}>
+                    <View style={styles.aiBoxLeft}>
+                        <View style={[styles.aiIconCircle, { backgroundColor: theme.primary }]}>
+                            <Sparkles size={20} color="#FFF" fill="#FFF" />
+                        </View>
                     </View>
+                    <View style={styles.aiBoxCenter}>
+                        <Text style={[styles.aiTitle, { color: theme.text }]}>İlim ve Hikmet Sohbeti</Text>
+                        <Text style={[styles.aiQuestion, { color: theme.subText }]} numberOfLines={1}>
+                            {type === 'quran' ? "Kur'an'ın kalplere şifasını sor..." : "Bu duaların faziletini sor..."}
+                        </Text>
+                    </View>
+                    <ChevronRight size={22} color={theme.primary} />
                 </View>
-                <View style={styles.aiBoxCenter}>
-                    <Text style={[styles.aiTitle, { color: theme.text }]}>İlim ve Hikmet Sohbeti</Text>
-                    <Text style={[styles.aiQuestion, { color: theme.subText }]} numberOfLines={1}>
-                        {type === 'quran' ? "Kur'an'ın kalplere şifasını sor..." : "Bu duaların faziletini sor..."}
-                    </Text>
-                </View>
-                <View style={styles.aiBoxRight}>
-                    <ChevronRight size={20} color={theme.primary} />
-                </View>
-            </TouchableOpacity>
+            </AnimatedCard>
           }
         />
       )}
@@ -314,42 +329,38 @@ export default function LibraryDetailScreen({ route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  navOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 999, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 15, borderBottomWidth: 1 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  quranHeader: { padding: 16 },
-  tabsContainer: { flexDirection: 'row', padding: 4, borderRadius: 10, borderWidth: 1, marginBottom: 12 },
-  tabButton: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
-  tabText: { fontSize: 13, fontWeight: '600' },
-  simpleSearchContainer: { paddingHorizontal: 16, marginTop: 15, marginBottom: 10 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, borderRadius: 12, height: 45 },
-  searchInput: { flex: 1, fontSize: 16, marginLeft: 8 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
-  card: { padding: 16, borderRadius: 16, marginBottom: 12, elevation: 1, borderWidth: 1 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  numberBox: { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  numberText: { fontSize: 12, fontWeight: 'bold' },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', flex: 1 },
+  navOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 999, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15 },
+  headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
+  
+  quranHeader: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15 },
+  tabsPillContainer: { flexDirection: 'row', padding: 4, borderRadius: 16, marginBottom: 15 },
+  tabPill: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12 },
+  tabPillText: { fontSize: 14 },
+  
+  simpleSearchContainer: { paddingHorizontal: 20, marginTop: 10, marginBottom: 15 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderRadius: 16, height: 52 },
+  searchInput: { flex: 1, fontSize: 16, marginLeft: 12 },
+  
+  listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  
+  card: { padding: 18, borderRadius: 20, marginBottom: 14, borderWidth: 1, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 8 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  numberBox: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  numberText: { fontSize: 14, fontWeight: '800' },
+  cardTitle: { fontSize: 17, fontWeight: '700', flex: 1 },
   badgeContainer: { flexDirection: 'row', marginRight: 10 },
-  badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 4 },
-  badgeText: { fontSize: 10, fontWeight: '700' },
-  cardDetail: { fontSize: 14, lineHeight: 22 },
-  meaningContainer: { padding: 10, borderRadius: 8, marginTop: 8 },
-  cardMeaning: { fontSize: 13, fontStyle: 'italic' },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginLeft: 6 },
+  badgeText: { fontSize: 11, fontWeight: '800' },
+  cardDetail: { fontSize: 15, lineHeight: 22 },
+  meaningContainer: { padding: 12, borderRadius: 12, marginTop: 12 },
+  cardMeaning: { fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  gridItem: { flex: 1, margin: 4, height: 55, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1 },
-  gridText: { fontSize: 13, fontWeight: '700' },
 
-  // AI BOX STYLES
-  aiBox: { 
-    flexDirection: 'row', alignItems: 'center', padding: 18, 
-    borderRadius: 24, borderWidth: 1, elevation: 4, marginTop: 20,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10
-  },
-  aiBoxLeft: { marginRight: 15 },
-  aiIconCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  aiBox: { flexDirection: 'row', alignItems: 'center' },
+  aiBoxLeft: { marginRight: 16 },
+  aiIconCircle: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center' },
   aiBoxCenter: { flex: 1 },
-  aiTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  aiQuestion: { fontSize: 13, fontWeight: '500', fontStyle: 'italic' },
-  aiBoxRight: { marginLeft: 10 }
+  aiTitle: { fontSize: 17, fontWeight: '800', marginBottom: 4 },
+  aiQuestion: { fontSize: 14, fontStyle: 'italic' },
 });

@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/
+.git/
+.env
+.env.local
+.env.development
+.env.test
+.env.production

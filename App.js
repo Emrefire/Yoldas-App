@@ -8,7 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import appCheck from '@react-native-firebase/app-check';
 // Context & DB & Error Boundary
 import { ThemeProvider, useTheme } from './src/context/ThemeContext'; 
 import { initDB } from './src/database/db';
@@ -34,22 +34,23 @@ import HeritageScreen from './src/screens/HeritageScreen';
 import ImsakiyeScreen from './src/screens/ImsakiyeScreen';
 // 🔥 BİLGİ YARIŞMASI EKLENDİ
 import QuizScreen from './src/screens/QuizScreen'; 
-
+import { registerForPushNotificationsAsync } from './src/services/notificationService.js';
 export const navigationRef = createNavigationContainerRef();
 
 SplashScreen.preventAutoHideAsync();
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-
+// 🔥 APP CHECK KALKANI (Uygulama başlar başlamaz devreye girer)
+try {
+  appCheck().initializeAppCheck({
+    provider: appCheck().newReactNativeFirebaseAppCheckProvider(),
+    isTokenAutoRefreshEnabled: true,
+  });
+  console.log("🛡️ App Check kalkanı başarıyla kuruldu!");
+} catch (error) {
+  console.log("App Check kurulum hatası veya zaten aktif:", error);
+}
 function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -144,31 +145,31 @@ export default function App() {
         await Notifications.setNotificationChannelAsync('ney', {
           name: 'Ney Sesi 🎶',
           importance: Notifications.AndroidImportance.MAX,
-          sound: 'ney.wav', 
+          sound: 'ney.mp3', 
           vibrationPattern: [0, 250, 250, 250],
         });
         await Notifications.setNotificationChannelAsync('kus-civiltisi', {
           name: 'Kuş Cıvıltısı 🐦',
           importance: Notifications.AndroidImportance.MAX,
-          sound: 'kuscivilti.wav', 
+          sound: 'kuscivilti.mp3', 
           vibrationPattern: [0, 250, 250, 250],
         });
         await Notifications.setNotificationChannelAsync('ruzgar-cani', {
           name: 'Rüzgar Çanı 🎐',
           importance: Notifications.AndroidImportance.MAX,
-          sound: 'ruzgarcan.wav',
+          sound: 'ruzgarcan.mp3',
           vibrationPattern: [0, 250, 250, 250],
         });
         await Notifications.setNotificationChannelAsync('tibetan-bowl', {
           name: 'Derin Çınlama 🧘',
           importance: Notifications.AndroidImportance.MAX,
-          sound: 'thunderbowl.wav',
+          sound: 'thunderbowl.mp3',
           vibrationPattern: [0, 250, 250, 250],
         });
         await Notifications.setNotificationChannelAsync('klasik', {
           name: 'Klasik 🎸',
           importance: Notifications.AndroidImportance.MAX,
-          sound: 'arabicsounds.wav',
+          sound: 'arabicsounds.mp3',
           vibrationPattern: [0, 250, 250, 250],
         });
         await Notifications.setNotificationChannelAsync('default', {
@@ -187,19 +188,34 @@ export default function App() {
   useEffect(() => {
     async function prepare() {
       try {
+        // 1. ÖNCE HAYATİ KONTROLLERİ YAPALIM (Uygulama donmasın diye)
         await initDB();
-        await setupNotificationChannels();
-
         const alreadyLaunched = await AsyncStorage.getItem('alreadyLaunched');
+        
         if (alreadyLaunched === null) {
           setIsFirstLaunch(true);
         } else {
           setIsFirstLaunch(false);
         }
 
+        // 2. BİLDİRİM İŞLEMLERİ (Burayı ayrı bir kalkan içine aldık)
+        try {
+          await setupNotificationChannels();
+          // Eğer import etmeyi unuttuysan uygulamanın çökmesini engeller:
+          if (typeof registerForPushNotificationsAsync === 'function') {
+            await registerForPushNotificationsAsync();
+          } else {
+            console.log("⚠️ Uyarı: registerForPushNotificationsAsync fonksiyonu App.js'ye import edilmemiş!");
+          }
+        } catch (notifError) {
+          console.log("❌ Bildirim kurulumunda hata oldu ama uygulama çökmekten kurtarıldı:", notifError);
+        }
+
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (e) {
-        console.warn(e);
+        console.warn("Genel başlatma hatası:", e);
+        // Eğer her şeye rağmen bir hata olursa, uygulama sonsuza kadar donmasın diye can simidi:
+        if (isFirstLaunch === null) setIsFirstLaunch(false); 
       } finally {
         setAppIsReady(true);
       }

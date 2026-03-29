@@ -2,7 +2,7 @@
   "expo": {
     "name": "Yoldaş",
     "slug": "YoldasApp",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,14 +14,18 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yoldas.app",
+      "bundleIdentifier": "com.emre.yoldas",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Yoldaş, namaz vakitlerini ve kıble yönünü doğru hesaplamak için konumuna ihtiyaç duyar."
       }
     },
     "android": {
-      "package": "com.yoldas.app",
+      "package": "com.emre.yoldas",
+      "versionCode": 2,
+      "blockedPermissions": [
+        "android.permission.ACTIVITY_RECOGNITION"
+      ],
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -30,7 +34,9 @@
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "plugins": [
@@ -50,11 +56,11 @@
           "icon": "./assets/icon.png",
           "color": "#193f33",
           "sounds": [
-            "./assets/sounds/ney.wav",
-            "./assets/sounds/kuscivilti.wav",
-            "./assets/sounds/ruzgarcan.wav",
-            "./assets/sounds/thunderbowl.wav",
-            "./assets/sounds/arabicsounds.wav"
+            "./assets/sounds/ney.mp3",
+            "./assets/sounds/kuscivilti.mp3",
+            "./assets/sounds/ruzgarcan.mp3",
+            "./assets/sounds/thunderbowl.mp3",
+            "./assets/sounds/arabicsounds.mp3"
           ]
         }
       ],
@@ -65,7 +71,7 @@
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
             "kotlinVersion": "2.0.21",
-            "usesCleartextTraffic": true,
+            "usesCleartextTraffic": false,
             "enableMultidex": true
           }
         }
@@ -73,14 +79,13 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+          "androidAppId": "ca-app-pub-7784699073373527~9333732677"
         }
       ]
     ],
     "extra": {
       "eas": {
-        "projectId": "f657d3a5-f93f-432c-ab5f-57fe5c77ef8e"
+        "projectId": "2ddba26e-bbc7-40d2-a330-ff3a618f0f26"
       }
     }
   }

@@ -14,7 +14,7 @@ const { width, height } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = (width - 40 - CARD_GAP) / 2;
 
-const mosqueImage = require('../../assets/mosque.png');
+const mosqueImage = require('../../assets/mosque.webp');
 
 const SERVERS = [
   process.env.EXPO_PUBLIC_OVERPASS_MAIN, 

@@ -51,4 +51,4 @@
 [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Emrefire)
 
 ---
-*Bu proje, modern teknolojilerin manevi değerlerle harmanlandığı bir mühendislik çalışmasıdır.* knk son hali bu oldu gayet iyi mi
+*Bu proje, modern teknolojilerin manevi değerlerle harmanlandığı bir mühendislik çalışmasıdır.
